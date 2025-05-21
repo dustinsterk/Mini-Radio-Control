@@ -371,7 +371,7 @@ for label, cmd1, txt1, cmd2, txt2, ctrl_type in controls_data:
 # Auto-Verbindung beim Startversuch
 #app.after(100, init_serial)
 
-# Repeat the check_serial_data function every 200ms
-app.repeat(200, check_serial_data)
+# Repeat the check_serial_data function every 300ms
+app.repeat(300, check_serial_data)
 
 app.display()

@@ -157,7 +157,25 @@ def parse_and_update_radio_status(log_string):
             app.status_frequency.value = f"{display_frequency_khz} kHz"
 
         if hasattr(app, 'status_fw_version'):
-            app.status_fw_version.value = f"v{fw_version}" # Removed "FW: " prefix
+            fw_display_text = "---"  # Standardwert, falls fw_version leer oder ungültig ist
+            
+            # fw_version ist hier der Wert aus parts[0]
+            if isinstance(fw_version, str) and fw_version.strip():
+                raw_fw = fw_version.strip()
+                # Spezifischer Fall für das Format "201" -> "v2.01"
+                if len(raw_fw) == 3 and raw_fw.isdigit():
+                    major = raw_fw[0]
+                    minor = raw_fw[1:]
+                    fw_display_text = f"v{major}.{minor}"
+                else:
+                    # Allgemeiner Fallback:
+                    # Wenn es numerisch ist und nicht mit 'v' beginnt, 'v' voranstellen
+                    if not raw_fw.lower().startswith('v') and \
+                       (raw_fw.isdigit() or (raw_fw.count('.') == 1 and raw_fw.replace('.', '', 1).isdigit())):
+                        fw_display_text = f"v{raw_fw}"
+                    else:  # Ansonsten so anzeigen, wie es ist (z.B. "alpha", "v1.2.3-beta")
+                        fw_display_text = raw_fw
+            app.status_fw_version.value = fw_display_text
         if hasattr(app, 'status_mode_band'):
             app.status_mode_band.value = f"{current_mode}/{band_name}" # Removed spaces around '/'
         if hasattr(app, 'status_volume'):
@@ -257,7 +275,6 @@ current_grid_row += 1
 # --- Checkbox for Cyclic Reading ---
 app.enable_cyclic_reading = CheckBox(app, text="Enable Cyclic Reading", command=toggle_cyclic_reading, grid=[0, current_grid_row, 3, 1], align="left")
 app.enable_cyclic_reading.text_color = dark_theme_text_color
-#app.enable_cyclic_reading.value = 1 # Set checkbox to be checked by default
 current_grid_row += 1
 
 # --- Definition der Steuerelemente ---

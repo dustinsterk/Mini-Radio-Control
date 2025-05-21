@@ -59,7 +59,7 @@ The application sends single-character commands to the SI4732 radio (as document
 3.  **Running the Application:**
     *   Connect your ESP32-SI4732 radio to your computer via USB.
     *   Download or clone this repository.
-    *   Navigate to the directory containing `MiniRadip.py` (or your script's name).
+    *   Navigate to the directory containing `MiniRadio.py` (or your script's name).
     *   Run the script:
         ```bash
         python MiniRadio.py

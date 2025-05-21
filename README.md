@@ -67,7 +67,7 @@ The application sends single-character commands to the SI4732 radio (as document
     *   Select the correct serial port for your radio from the dropdown menu.
     *   Click the "Connect" button.
     *   Check the "Enable Cyclic Reading" checkbox to see live status updates from the radio.
-    *   Use the buttons to control your radio!
+    *   Use the buttons to control your radio.
 
 ## Configuration:
 

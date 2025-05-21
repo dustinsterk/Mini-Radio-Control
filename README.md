@@ -62,7 +62,7 @@ The application sends single-character commands to the SI4732 radio (as document
     *   Navigate to the directory containing `MiniRadip.py` (or your script's name).
     *   Run the script:
         ```bash
-        python MiniRadip.py
+        python MiniRadio.py
         ```
     *   Select the correct serial port for your radio from the dropdown menu.
     *   Click the "Connect" button.

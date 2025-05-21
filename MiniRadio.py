@@ -40,8 +40,23 @@ def init_serial():
             app.connect_button.text = f"Connected" # Changed from "Verbunden" to "Connected"
             app.connect_button.text_color = "#66BB6A" # Grün
 
-        # On successful connection, log_mode_active state is determined by the checkbox handler.
-        # init_serial itself does not send 't' or change log_mode_active on success.
+        # Automatically attempt to enable cyclic reading on successful connection
+        print("INFO: Attempting to enable cyclic reading automatically after connection.")
+        # We want logging to be ON. log_mode_active is currently False (or should be after error handling).
+        # Sending 't' should toggle the radio's logging to ON.
+        if send_serial_command_internal('t', is_toggle_command=True):
+            log_mode_active = True # Now app believes logging is ON
+            if hasattr(app, 'enable_cyclic_reading'):
+                app.enable_cyclic_reading.value = 1 # Check the box
+            print("INFO: Cyclic reading enabled automatically.")
+        else:
+            # If sending 't' failed, log_mode_active remains False (or should be explicitly set)
+            # and the checkbox remains unchecked.
+            log_mode_active = False # Ensure it's false if command failed
+            if hasattr(app, 'enable_cyclic_reading'):
+                app.enable_cyclic_reading.value = 0 # Ensure box is unchecked
+            print("WARN: Failed to automatically enable cyclic reading. Please use the checkbox.")
+
 
     except serial.SerialException as e:
         print(f"ERROR: Error opening serial port {selected_port}: {e}")
@@ -108,11 +123,26 @@ def cleanup():
     """Aufräumarbeiten beim Schließen der Anwendung."""
     global ser, connected_port, log_mode_active
     print("INFO: Application is closing.")
+    # Ensure app.tk exists before trying to access winfo_exists
+    # and also ensure app itself is not None
+    app_exists = app and hasattr(app, 'tk') and app.tk
+
     if ser and ser.is_open:
+        # If logging was active, try to turn it off on the radio before closing port
+        if log_mode_active:
+            print("INFO: Attempting to disable radio logging before closing port...")
+            try:
+                ser.write('t'.encode('ascii')) # Send 't' to toggle logging off
+                # A short delay might be beneficial for the command to be processed by the radio
+                # However, time.sleep() in a GUI app's main thread during cleanup can be tricky.
+                # For now, just send and hope for the best, or make it non-blocking if issues arise.
+                print("INFO: 't' command sent to attempt disabling radio logging.")
+            except Exception as e_cleanup_write:
+                print(f"WARN: Could not send 't' command during cleanup: {e_cleanup_write}")
         ser.close()
         print(f"Serial port {connected_port} closed.")
         connected_port = None
-    if app.tk.winfo_exists(): # Prüfen, ob das Fenster noch existiert
+    if app_exists and app.tk.winfo_exists(): # Prüfen, ob das Fenster noch existiert
         app.destroy()
     sys.exit(0) # Sauberes Beenden
 
@@ -371,7 +401,7 @@ for label, cmd1, txt1, cmd2, txt2, ctrl_type in controls_data:
 # Auto-Verbindung beim Startversuch
 #app.after(100, init_serial)
 
-# Repeat the check_serial_data function every 300ms
-app.repeat(300, check_serial_data)
+# Repeat the check_serial_data function every 200ms
+app.repeat(200, check_serial_data)
 
 app.display()

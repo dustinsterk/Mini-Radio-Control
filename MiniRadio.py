@@ -159,8 +159,10 @@ def parse_and_update_radio_status(log_string):
         current_frequency_khz = int(parts[1])
         try:
             current_bfo_hz = int(parts[2])
+            current_cal_hz = int(parts[3])
         except ValueError: # Handles empty string or non-integer
             current_bfo_hz = 0
+            current_cal_hz = 0
         band_name = parts[4]
         current_mode = parts[5]
         volume = int(parts[9])
@@ -180,7 +182,7 @@ def parse_and_update_radio_status(log_string):
             # SSB: Display Frequency (Hz) = (currentFrequency kHz * 1000) + currentBFO Hz
             # current_frequency_khz is already in kHz for SSB
             actual_freq_khz = current_frequency_khz + (current_bfo_hz / 1000.0)
-            app.status_frequency.value = f"{actual_freq_khz:.1f} kHz (BFO: {current_bfo_hz}Hz)"
+            app.status_frequency.value = f"{actual_freq_khz:.1f} kHz (Calibration: {current_cal_hz}Hz)"
         else:
             # AM and other modes: currentFrequency is in 1 kHz units, display in kHz
             display_frequency_khz = current_frequency_khz

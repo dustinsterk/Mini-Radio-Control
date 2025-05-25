@@ -2,37 +2,44 @@
 
 This Python application provides a graphical user interface (GUI) to control an ESP32-based SI4732 radio receiver via a serial connection. It allows users to easily manage various radio functions without needing to send raw serial commands manually.
 
-![Screenshot](screenshot.png)
+![Screenshot](screenshot.png) 
 
 ## Features:
 
 *   **Intuitive GUI:** A user-friendly interface built with `guizero` for controlling radio operations.
 *   **Serial Port Management:**
     *   Automatically detects available serial ports.
-    *   Allows users to select the correct port for their radio (defaults to the last detected port or one containing "ACM" or "USB").
-    *   Provides a "Connect" button to establish/re-establish the serial connection.
+    *   Attempts to pre-select a likely port based on common USB-to-Serial chip names (e.g., CH340, CP210, FTDI) or generic terms like "USB SERIAL".
+    *   Allows users to select the correct port and **baud rate** for their radio from dropdown menus.
+    *   Provides a "Connect"/"Disconnect" toggle button to establish, terminate, and re-establish the serial connection.
 *   **Radio Control Functions:**
     *   Encoder Rotate (Frequency Up/Down, Menu Scroll)
-    *   Encoder Button Press
+    *   Encoder Button Press (represented by a clickable icon)
     *   Volume Up/Down
     *   Next/Previous Band
     *   Next/Previous Mode (FM/LSB/USB/AM)
     *   Next/Previous Step Size
     *   Next/Previous Bandwidth
-    *   AGC/Attenuator Up/Down
+    *   AGC/Attenuator Next/Previous
     *   Backlight Brighter/Dimmer
     *   Calibration Up/Down
     *   Sleep Timer On/Off
 *   **Real-time Status Display:**
-    *   Firmware Version
-    *   Current Frequency (displayed in MHz for FM, kHz for AM/SSB, with BFO for SSB)
-    *   Current Mode and Band Name
-    *   Volume Level
+    *   Firmware Version (e.g., "2.01" instead of "v2.01")
+    *   Current Frequency (displayed in MHz for FM, kHz for AM/SSB, with BFO for SSB; units directly appended, e.g., "145.500MHz")
+    *   Current Band and Mode (e.g., "SW/USB")
+    *   Volume Level (e.g., "30 (48%)")
+    *   Battery Level (e.g., "4.05V (80%)")
+    *   Step Size, Bandwidth, AGC Status
     *   Signal Strength (RSSI and SNR)
 *   **Configurable Cyclic Status Reading:**
-    *   A checkbox allows users to enable or disable the continuous polling of status information from the radio. This is useful if the serial communication interferes with radio reception.
+    *   A checkbox (with a flat, borderless design) allows users to enable or disable the continuous polling of status information from the radio.
+    *   Status display fields are reset to placeholders when disconnected.
 *   **Dark Theme:** A visually comfortable dark theme for the interface.
-*   **Cross-Platform (Potentially):** Built with Python, `pyserial`, and `guizero`, making it potentially cross-platform (developed and tested on Linux).
+*   **User Experience Enhancements:**
+    *   Connect button provides feedback on connection status and errors, including multi-line error messages.
+    *   Warnings if trying to operate controls or checkbox while disconnected.
+*   **Cross-Platform (Potentially):** Built with Python, `pyserial`, `guizero`, and `Pillow`, making it potentially cross-platform (developed and tested on Linux).
 
 ## How it Works:
 
@@ -43,17 +50,19 @@ The application sends single-character commands to the SI4732 radio (as document
 *   **Python 3**
 *   **pyserial:** For serial communication.
 *   **guizero:** For creating the graphical user interface.
+*   **Pillow (PIL):** For image manipulation (e.g., scaling the icon for the encoder button).
 
 ## Getting Started:
 
 1.  **Prerequisites:**
     *   Ensure you have Python 3 installed on your system.
     *   An ESP32-SI4732 based radio receiver flashed with firmware that supports serial control and the described log output format.
+    *   An icon file (e.g., `buttonpress.png`) in the same directory as the script if you want to use the icon for the Encoder Button. A fallback text button will be shown if the icon is not found.
 
 2.  **Installation of Dependencies:**
     Open your terminal or command prompt and install the necessary Python libraries:
     ```bash
-    pip install pyserial guizero
+    pip install pyserial guizero Pillow
     ```
 
 3.  **Running the Application:**
@@ -64,27 +73,28 @@ The application sends single-character commands to the SI4732 radio (as document
         ```bash
         python MiniRadio.py
         ```
-    *   Select the correct serial port for your radio from the dropdown menu.
-    *   Click the "Connect" button.
+    *   The application will attempt to auto-select a serial port and will use a default baud rate (115200). Adjust these via the dropdowns if necessary.
+    *   Click the "Connect" button. It will change to "Disconnect" upon successful connection.
     *   Check the "Enable Cyclic Reading" checkbox to see live status updates from the radio.
-    *   Use the buttons to control your radio.
+    *   Use the buttons and the encoder icon to control your radio.
 
 ## Configuration:
 
-*   **Serial Port:** The application attempts to auto-select a sensible default serial port. If this is incorrect, please select the appropriate port from the dropdown menu.
-*   **Baud Rate:** Currently hardcoded to `115200`. This is a common baud rate for ESP32 projects but may need adjustment if your radio firmware uses a different rate.
+*   **Serial Port & Baud Rate:** The application attempts to auto-select a serial port. Both port and baud rate can be selected from their respective dropdown menus before connecting.
+*   **Encoder Button Icon:** The script looks for an icon file (default: `buttonpress.png`) in its directory for the Encoder Button. If not found, a text button is displayed as a fallback.
 
 ## Known Issues / Limitations:
 
 *   The reliability of cyclic status updates can sometimes be affected by the quality of the serial connection or the radio's responsiveness.
-*   Layout has been optimized for a specific setup; minor adjustments might be needed for different screen resolutions or font settings.
+*   The precise visual centering of the Encoder Button icon across two grid columns can be challenging with `guizero` and might appear slightly different depending on the environment. The current implementation uses a stretched icon as a workaround.
 
 ## Future Enhancements (Ideas):
 
-*   More robust error handling for serial communication.
-*   Ability to save and load preferred settings (e.g., last used port).
-*   Visual feedback for ongoing commands.
-*   More detailed parsing and display of all available status parameters.
+*   More robust error handling and feedback for serial communication issues during operation.
+*   Ability to save and load preferred settings (e.g., last used port and baud rate).
+*   Visual feedback for ongoing commands or when the radio is busy.
+*   A more sophisticated method for the Encoder Button layout if `guizero`'s capabilities allow.
+*   Option to customize the Encoder Button icon path.
 
 ## Contributing:
 

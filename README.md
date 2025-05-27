@@ -26,14 +26,14 @@ This Python application provides a graphical user interface (GUI) to control an 
     *   Sleep Timer On/Off
 *   **Real-time Status Display:**
     *   Firmware Version (e.g., "2.01" instead of "v2.01")
-    *   Current Frequency (displayed in MHz for FM, kHz for AM/SSB, with BFO for SSB; units directly appended, e.g., "145.500MHz")
-    *   Current Band and Mode (e.g., "SW/USB")
+    *   Current Frequency (displayed in MHz for FM, kHz for AM/SSB, with BFO for SSB; units directly appended, e.g., "103.2MHz")
+    *   Current Band and Mode (e.g., "41M/USB")
     *   Volume Level (e.g., "30 (48%)")
     *   Battery Level (e.g., "4.05V (80%)")
     *   Step Size, Bandwidth, AGC Status
     *   Signal Strength (RSSI and SNR)
 *   **Configurable Cyclic Status Reading:**
-    *   A checkbox (with a raised border style) allows users to enable or disable the continuous polling of status information from the radio.
+    *   A checkbox allows users to enable or disable the continuous polling of status information from the radio.
     *   Status display fields are reset to placeholders when disconnected.
 *   **Dark Theme:** A visually comfortable dark theme for the interface.
 *   **User Experience Enhancements:**

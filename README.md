@@ -2,7 +2,7 @@
 
 This Python application provides a graphical user interface (GUI) to control an ESP32-based SI4732 radio receiver via a serial connection. It allows users to easily manage various radio functions without needing to send raw serial commands manually.
 
-![Screenshot](screenshot.png) 
+![Screenshot](screenshot.png)
 
 ## Features:
 
@@ -14,7 +14,7 @@ This Python application provides a graphical user interface (GUI) to control an 
     *   Provides a "Connect"/"Disconnect" toggle button to establish, terminate, and re-establish the serial connection.
 *   **Radio Control Functions:**
     *   Encoder Rotate (Frequency Up/Down, Menu Scroll)
-    *   Encoder Button Press (represented by a clickable icon)
+    *   Encoder Button Press (implemented as a prominent text button)
     *   Volume Up/Down
     *   Next/Previous Band
     *   Next/Previous Mode (FM/LSB/USB/AM)
@@ -33,13 +33,14 @@ This Python application provides a graphical user interface (GUI) to control an 
     *   Step Size, Bandwidth, AGC Status
     *   Signal Strength (RSSI and SNR)
 *   **Configurable Cyclic Status Reading:**
-    *   A checkbox (with a flat, borderless design) allows users to enable or disable the continuous polling of status information from the radio.
+    *   A checkbox (with a raised border style) allows users to enable or disable the continuous polling of status information from the radio.
     *   Status display fields are reset to placeholders when disconnected.
 *   **Dark Theme:** A visually comfortable dark theme for the interface.
 *   **User Experience Enhancements:**
     *   Connect button provides feedback on connection status and errors, including multi-line error messages.
     *   Warnings if trying to operate controls or checkbox while disconnected.
-*   **Cross-Platform (Potentially):** Built with Python, `pyserial`, `guizero`, and `Pillow`, making it potentially cross-platform (developed and tested on Linux).
+*   **Cross-Platform (Potentially):** Built with Python, `pyserial`, and `guizero`, making it potentially cross-platform (developed and tested on Linux).
+*   **Linux Executable:** A pre-compiled executable for Linux (`Mini-Radio Control`) is available, created with PyInstaller.
 
 ## How it Works:
 
@@ -50,19 +51,32 @@ The application sends single-character commands to the SI4732 radio (as document
 *   **Python 3**
 *   **pyserial:** For serial communication.
 *   **guizero:** For creating the graphical user interface.
-*   **Pillow (PIL):** For image manipulation (e.g., scaling the icon for the encoder button).
 
 ## Getting Started:
+
+### Option 1: Using the Linux Executable (Recommended for Linux users)
+
+1.  Download the `Mini-Radio Control` executable file. You can find this in the `dist` folder of this repository (once uploaded).
+2.  Navigate to the directory where you downloaded the file.
+3.  Make the file executable:
+    ```bash
+    chmod +x "Mini-Radio Control"
+    ```
+4.  Run the application:
+    ```bash
+    ./"Mini-Radio Control"
+    ```
+
+### Option 2: Running from Source (Python 3 required)
 
 1.  **Prerequisites:**
     *   Ensure you have Python 3 installed on your system.
     *   An ESP32-SI4732 based radio receiver flashed with firmware that supports serial control and the described log output format.
-    *   An icon file (e.g., `buttonpress.png`) in the same directory as the script if you want to use the icon for the Encoder Button. A fallback text button will be shown if the icon is not found.
 
 2.  **Installation of Dependencies:**
     Open your terminal or command prompt and install the necessary Python libraries:
     ```bash
-    pip install pyserial guizero Pillow
+    pip install pyserial guizero
     ```
 
 3.  **Running the Application:**
@@ -71,30 +85,26 @@ The application sends single-character commands to the SI4732 radio (as document
     *   Navigate to the directory containing `MiniRadio.py` (or your script's name).
     *   Run the script:
         ```bash
-        python MiniRadio.py
+        python3 MiniRadio.py
         ```
     *   The application will attempt to auto-select a serial port and will use a default baud rate (115200). Adjust these via the dropdowns if necessary.
     *   Click the "Connect" button. It will change to "Disconnect" upon successful connection.
     *   Check the "Enable Cyclic Reading" checkbox to see live status updates from the radio.
-    *   Use the buttons and the encoder icon to control your radio.
+    *   Use the buttons to control your radio.
 
 ## Configuration:
 
 *   **Serial Port & Baud Rate:** The application attempts to auto-select a serial port. Both port and baud rate can be selected from their respective dropdown menus before connecting.
-*   **Encoder Button Icon:** The script looks for an icon file (default: `buttonpress.png`) in its directory for the Encoder Button. If not found, a text button is displayed as a fallback.
 
 ## Known Issues / Limitations:
 
 *   The reliability of cyclic status updates can sometimes be affected by the quality of the serial connection or the radio's responsiveness.
-*   The precise visual centering of the Encoder Button icon across two grid columns can be challenging with `guizero` and might appear slightly different depending on the environment. The current implementation uses a stretched icon as a workaround.
 
 ## Future Enhancements (Ideas):
 
 *   More robust error handling and feedback for serial communication issues during operation.
 *   Ability to save and load preferred settings (e.g., last used port and baud rate).
 *   Visual feedback for ongoing commands or when the radio is busy.
-*   A more sophisticated method for the Encoder Button layout if `guizero`'s capabilities allow.
-*   Option to customize the Encoder Button icon path.
 
 ## Contributing:
 

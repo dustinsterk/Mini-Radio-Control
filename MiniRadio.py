@@ -1,11 +1,11 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 import sys
-import os # For path manipulation
+# import os # For path manipulation (No longer needed if script_dir is removed)
 import serial  # For serial communication
 import serial.tools.list_ports # To list serial ports
-from guizero import App, PushButton, Text, Combo, Picture # Box import removed
-from PIL import Image # For image manipulation
+from guizero import App, PushButton, Text, Combo # Picture and Box import removed
+# from PIL import Image # For image manipulation (No longer needed)
 from guizero import CheckBox # Checkbox added (capitalization corrected)
 
 # --- Configuration ---
@@ -53,7 +53,7 @@ def toggle_connection():
     try:
         selected_port = app.port_selector.value # Read port from dropdown
         if not selected_port or selected_port == "No ports found": # Changed German string
-            print("No valid port selected.")
+            print("No valid port selected.") # Changed German string
             if hasattr(app, 'connect_button'): # Nur aktualisieren, wenn Button existiert
                 app.connect_button.text = "No port\nselected" # Zeilenumbruch hinzugefügt
                 app.connect_button.text_color = "#FFA726" # Orange
@@ -277,14 +277,14 @@ def parse_and_update_radio_status(log_string):
                 if len(raw_fw) == 3 and raw_fw.isdigit():
                     major = raw_fw[0]
                     minor = raw_fw[1:]
-                    fw_display_text = f"{major}.{minor}" # "v" entfernt
+                    fw_display_text = f"{major}.{minor}" # "v" removed
                 else:
                     # Remove "v" or "V" from the beginning, if present
                     if raw_fw.lower().startswith('v'):
                         fw_display_text = raw_fw[1:]
                     else:
                         fw_display_text = raw_fw
-            app.status_fw_version.value = fw_display_text
+            app.status_fw_version.value = fw_display_text # "v" removed
         if hasattr(app, 'status_mode_band'): # Order changed to Band/Mode
             app.status_mode_band.value = f"{band_name}/{current_mode}"
         if hasattr(app, 'status_volume'): # Now uses format_volume_display
@@ -350,13 +350,11 @@ def toggle_cyclic_reading():
 
 
 # --- GUI Setup ---
-# Get the directory where the script is located
-script_dir = os.path.dirname(__file__)
+# script_dir = os.path.dirname(__file__) # No longer needed as icon is removed
 
 # Colors for Dark Theme
 # Window height adjusted for new status fields
-app = App(title="Mini-Radio Control", width=410, height=880, layout="grid") # Height slightly increased
-app.encoder_icon_scaled = None # Store scaled icon image on the app object
+app = App(title="Mini-Radio Control", width=410, height=878, layout="grid") # Height slightly increased
 app.bg = '#2E2E2E' # Dark background for Dark Theme
 dark_theme_text_color = "#E0E0E0" # Light gray for text
 dark_theme_button_bg = "#4A4A4A"  # Medium dark gray for buttons
@@ -376,7 +374,7 @@ else:
     print(f"Found ports: {available_ports}")
     # Auto-Auswahl Logik
     # Keywords to look for in port description or name
-    PORT_KEYWORDS = ["CH340", "CP210", "FTDI", "USB SERIAL", "SERIAL", "ACM", "USB-SERIAL", "UART"]
+    PORT_KEYWORDS = ["CH340", "CP210", "FTDI", "USB SERIAL", "SERIAL", "ACM", "USB-SERIAL", "UART"] # Auto-selection logic
     for port_obj in ports_info:
         desc = (port_obj.description or "").upper()
         name = (port_obj.name or "").upper() # port.name is usually the base name like 'ttyUSB0' or 'COM3'
@@ -394,7 +392,7 @@ app.tk.config(padx=10, pady=10)
 
 # --- Port Selection and Connect ---
 current_grid_row = 0 # Start directly with port selection in row 0
-Text(app, text="Serial Port:", grid=[0, current_grid_row], align="left").text_color = dark_theme_text_color # Starts now in row 1
+Text(app, text="Serial Port:", grid=[0, current_grid_row], align="left").text_color = dark_theme_text_color # Starts now in row 0
 app.port_selector = Combo(app, options=available_ports, grid=[1, current_grid_row], width=15, align="left")
 app.port_selector.bg = dark_theme_combo_bg
 app.port_selector.text_color = dark_theme_combo_text_color
@@ -408,7 +406,7 @@ elif available_ports and available_ports[0] != "No ports found":
 
 # Connect button spans two rows and has an increased height
 app.connect_button = PushButton(app, text="Connect", command=toggle_connection, grid=[2, current_grid_row, 1, 2], width=10, height=3)
-app.connect_button.bg = dark_theme_button_bg
+app.connect_button.bg = dark_theme_button_bg # Standard text color for the button
 app.connect_button.text_color = dark_theme_text_color # Standard Textfarbe für den Button
 current_grid_row += 1
 
@@ -427,24 +425,24 @@ current_grid_row += 1
 # --- Checkbox for Cyclic Reading ---
 app.enable_cyclic_reading = CheckBox(app, text="Enable Cyclic Reading", command=toggle_cyclic_reading, grid=[0, current_grid_row, 3, 1], align="left")
 app.enable_cyclic_reading.text_color = dark_theme_text_color
-# Access the underlying tkinter widget and set relief to "flat"
-app.enable_cyclic_reading.tk.config(relief="flat", borderwidth=0)
 current_grid_row += 1
 
 # --- Control Definitions ---
 # Structure: (Label Text, Command1, Text Button1, Command2, Text Button2, Type ["pair" or "single"])
+# "Encoder Press" is handled separately above the main loop.
 controls_data = [
-    ("Encoder Button",      None, None,          None, None,       "single"), # Text "Press" (txt1) removed, will use icon
-    ("Encoder Rotate",      'R', "Right",        'r', "Left",      "pair"),
-    ("Band",                'B', "Next",    	 'b', "Previous",  "pair"), # Band wieder vor Mode
-    ("Mode",               	'M', "Next",    	 'm', "Previous",  "pair"), # Mode wieder nach Band
-    ("Calibration",        	'I', "Up",        	 'i', "Down",      "pair"),
-    ("Step Size",        	'S', "Next",     	 's', "Previous",  "pair"),
-    ("Bandwidth",          	'W', "Next",     	 'w', "Previous",  "pair"),
-    ("AGC/Att",             'A', "Next",         'a', "Previous",  "pair"),
+    # ("Encoder Press",       'e', "Press",       None, None,       "single"), # Moved out
+    ("Encoder Rotate",      'R', "Right",        'r', "Left",      "pair"), # Band before Mode again
+    ("Band",                'B', "Next",    	 'b', "Previous",  "pair"), # Mode after Band again
+    ("Mode",               	'M', "Next",    	 'm', "Previous",  "pair"), # Renamed from AGC
+    ("Calibration",        	'I', "Up",        	 'i', "Down",      "pair"), # New for Step Size
+    ("Step Size",        	'S', "Next",     	 's', "Previous",  "pair"), # New for Bandwidth
+    ("Bandwidth",          	'W', "Next",     	 'w', "Previous",  "pair"), # New for AGC Status
+    ("AGC/Att",             'A', "Next",         'a', "Previous",  "pair"), # New for Battery Voltage (as string)
     ("Volume",          	'V', "Up",      	 'v', "Down",      "pair"),
     ("Backlight",    		'L', "Brighter",     'l', "Dimmer",    "pair"),
     ("Sleep",               'O', "On",         	 'o', "Off",       "pair"),
+    # Add new controls here if needed, they will be added below "Encoder Press"
 ]
 
 # --- Radio Status Display Area ---
@@ -457,7 +455,7 @@ current_grid_row += 1
 
 fw_label = Text(app, text="FW Version:", grid=[0, current_grid_row], **status_text_config)
 fw_label.text_color = dark_theme_text_color
-app.status_fw_version = Text(app, text="---", grid=[1, current_grid_row, 2, 1], **status_text_config) # Spans 2 cols
+app.status_fw_version = Text(app, text="---", grid=[1, current_grid_row, 2, 1], **status_text_config) # Spans 2 cols, space removed
 app.status_fw_version.text_color = dark_theme_text_color
 current_grid_row += 1
 
@@ -526,6 +524,31 @@ def reset_status_display():
     if hasattr(app, 'status_volume'): app.status_volume.value = "-- (--%)"
     print("INFO: Status display fields reset.")
 
+# --- Create "Encoder Press" button manually above the other controls --- # This will be the first control row after status
+encoder_press_label_text = "Encoder Press"
+encoder_press_cmd = 'e'
+encoder_press_button_text = "Press"
+
+lbl_encoder_press = Text(app, text=f"{encoder_press_label_text}:", grid=[0, current_grid_row], align="left")
+lbl_encoder_press.text_color = dark_theme_text_color
+
+btn_encoder_press = PushButton(
+    app,
+    text=encoder_press_button_text,
+    command=lambda: send_serial_command(encoder_press_cmd),
+    grid=[1, current_grid_row, 2, 1],  # Start in column 1, span 2 columns
+    width="23",                        # Fill the width of the spanned columns
+    align = "right"                    # This align might not do much if width="fill" or a large width is used
+)
+btn_encoder_press.bg = dark_theme_button_bg
+btn_encoder_press.text_color = dark_theme_text_color
+
+# Access the underlying tkinter widget to set relief style
+# Common relief styles: 'flat', 'raised', 'sunken', 'groove', 'ridge'
+btn_encoder_press.tk.config(relief="raised", borderwidth=2) # Example: raised border with width 2
+current_grid_row += 1
+
+# --- Loop to create paired buttons for other controls ---
 
 for label, cmd1, txt1, cmd2, txt2, ctrl_type in controls_data:
     lbl = Text(app, text=f"{label}:", grid=[0, current_grid_row], align="left")
@@ -534,37 +557,17 @@ for label, cmd1, txt1, cmd2, txt2, ctrl_type in controls_data:
     # text_color is set after creation
     button_properties = {"width": 10, "align": "right"}
 
-    if ctrl_type == "pair":
-        # Decrement button (cmd2, txt2) on the left
-        btn_decrement = PushButton(app, text=txt2, command=lambda c=cmd2: send_serial_command(c), grid=[1, current_grid_row], **button_properties)
-        btn_decrement.bg = dark_theme_button_bg
-        btn_decrement.text_color = dark_theme_text_color
+    # Since "Encoder Press" (the only "single" type) is handled separately,
+    # all remaining controls in controls_data are expected to be "pair".
+    # Decrement button (cmd2, txt2) on the left
+    btn_decrement = PushButton(app, text=txt2, command=lambda c=cmd2: send_serial_command(c), grid=[1, current_grid_row], **button_properties)
+    btn_decrement.bg = dark_theme_button_bg
+    btn_decrement.text_color = dark_theme_text_color
 
-        # Increment button (cmd1, txt1) on the right
-        btn_increment = PushButton(app, text=txt1, command=lambda c=cmd1: send_serial_command(c), grid=[2, current_grid_row], **button_properties)
-        btn_increment.bg = dark_theme_button_bg
-        btn_increment.text_color = dark_theme_text_color
-    elif ctrl_type == "single":
-        # Use a Picture widget as a clickable icon button
-        # cmd1 is the command (e.g., 'e'), txt1 is None (icon is used instead of text)
-        if label == "Encoder Button": # Be specific for the encoder button
-            icon_filename = "buttonpress.png" # Name of your icon file
-            icon_path_abs = os.path.join(script_dir, icon_filename)
-            ICON_SIZE = (210, 48) # Desired icon size in pixels (width, height) - Doubled size
-
-            pil_img = Image.open(icon_path_abs)
-            # Resize the image using LANCZOS for better quality
-            app.encoder_icon_scaled = pil_img.resize(ICON_SIZE, Image.Resampling.LANCZOS)
-
-            # Place the Picture widget directly in the app's grid, spanning 2 columns and aligned left.
-            picture_button = Picture(
-                app, # Parent is the main app
-                image=app.encoder_icon_scaled,
-                grid=[1, current_grid_row, 2, 1], # Spans columns 1 & 2
-                align="right" # Align the picture to the left within the spanned columns
-            )
-            # cmd1 is 'e' for the Encoder Button from controls_data.
-            picture_button.when_clicked = lambda event_data: send_serial_command("e")
+    # Increment button (cmd1, txt1) on the right
+    btn_increment = PushButton(app, text=txt1, command=lambda c=cmd1: send_serial_command(c), grid=[2, current_grid_row], **button_properties)
+    btn_increment.bg = dark_theme_button_bg
+    btn_increment.text_color = dark_theme_text_color
 
     current_grid_row += 1
 

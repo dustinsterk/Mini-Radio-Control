@@ -4,9 +4,13 @@ import sys
 # import os # For path manipulation (No longer needed if script_dir is removed)
 import serial  # For serial communication
 import serial.tools.list_ports # To list serial ports
-from guizero import App, PushButton, Text, Combo # Picture and Box import removed
+from guizero import App, PushButton, Text, Combo, Window, Box, ListBox, TextBox # Picture and Box import removed, Window and Box added
 # from PIL import Image # For image manipulation (No longer needed)
 from guizero import CheckBox # Checkbox added (capitalization corrected)
+
+# --- Matplotlib for Spectrum Analyzer ---
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 # --- Configuration ---
 # BAUD_RATE is replaced by dynamic selection
@@ -16,12 +20,52 @@ DEFAULT_BAUD_RATE = 115200
 ser = None
 connected_port = None # Stores the name of the currently connected port
 log_mode_active = False # Now controlled by the checkbox
+spectrum_window_instance = None
+memory_viewer_window_instance = None # Renamed
+current_radio_frequency_khz = None
+current_radio_band_name = None
+current_radio_step_size_str = None
+current_radio_mode_str = None
 
 # --- Constants for battery calculation ---
 MIN_BATTERY_VOLTAGE = 3.2
 MAX_BATTERY_VOLTAGE = 4.2
 MAX_VOLUME = 63
 # PERCENTAGE_MULTIPLIER = 100 # Used directly in the code
+
+# --- Band Data for Spectrum Analyzer ---
+# Keys should match the band_name string reported by the radio (parts[4])
+BANDS_DATA = {
+    "VHF": {"min_khz": 64000, "max_khz": 108000, "default_mode": "FM"},
+    "ALL": {"min_khz": 150, "max_khz": 30000, "default_mode": "AM"},
+    "11M": {"min_khz": 25600, "max_khz": 26100, "default_mode": "AM"},
+    "13M": {"min_khz": 21500, "max_khz": 21900, "default_mode": "AM"},
+    "15M": {"min_khz": 18900, "max_khz": 19100, "default_mode": "AM"}, # Shortwave Broadcast 15M
+    "16M": {"min_khz": 17500, "max_khz": 18100, "default_mode": "AM"},
+    "19M": {"min_khz": 15100, "max_khz": 15900, "default_mode": "AM"},
+    "22M": {"min_khz": 13500, "max_khz": 13900, "default_mode": "AM"},
+    "25M": {"min_khz": 11000, "max_khz": 13000, "default_mode": "AM"},
+    "31M": {"min_khz": 9000, "max_khz": 11000, "default_mode": "AM"},
+    "41M": {"min_khz": 7000, "max_khz": 9000, "default_mode": "AM"}, # Note: Overlaps with 40M Ham band
+    "49M": {"min_khz": 5000, "max_khz": 7000, "default_mode": "AM"},
+    "60M": {"min_khz": 4000, "max_khz": 5100, "default_mode": "AM"},
+    "75M": {"min_khz": 3500, "max_khz": 4000, "default_mode": "AM"}, # Note: Overlaps with 80M Ham band
+    "90M": {"min_khz": 3000, "max_khz": 3500, "default_mode": "AM"},
+    "MW3": {"min_khz": 1700, "max_khz": 3500, "default_mode": "AM"}, # Assuming radio might report these
+    "MW2": {"min_khz": 495, "max_khz": 1701, "default_mode": "AM"},
+    "MW1": {"min_khz": 150, "max_khz": 1800, "default_mode": "AM"},
+    "160M": {"min_khz": 1800, "max_khz": 2000, "default_mode": "LSB"},
+    "80M": {"min_khz": 3500, "max_khz": 4000, "default_mode": "LSB"},
+    "40M": {"min_khz": 7000, "max_khz": 7300, "default_mode": "LSB"},
+    "30M": {"min_khz": 10000, "max_khz": 10200, "default_mode": "LSB"},
+    "20M": {"min_khz": 14000, "max_khz": 14400, "default_mode": "USB"},
+    "17M": {"min_khz": 18000, "max_khz": 18200, "default_mode": "USB"}, # Ham Radio 17M
+    "15M HAM": {"min_khz": 21000, "max_khz": 21500, "default_mode": "USB"}, # Distinguish from SW Broadcast 15M
+    "12M": {"min_khz": 24800, "max_khz": 25000, "default_mode": "USB"},
+    "10M": {"min_khz": 28000, "max_khz": 29700, "default_mode": "USB"},
+    "CB": {"min_khz": 25000, "max_khz": 30000, "default_mode": "AM"},
+}
+
 
 def toggle_connection():
     """Toggles the serial connection (connects if disconnected, disconnects if connected)."""
@@ -55,7 +99,7 @@ def toggle_connection():
         if not selected_port or selected_port == "No ports found": # Changed German string
             print("No valid port selected.") # Changed German string
             if hasattr(app, 'connect_button'): # Nur aktualisieren, wenn Button existiert
-                app.connect_button.text = "No port\nselected" # Zeilenumbruch hinzugefügt
+                app.connect_button.text = "No port\nselected!" # Zeilenumbruch hinzugefügt
                 app.connect_button.text_color = "#FFA726" # Orange
             return
 
@@ -95,7 +139,7 @@ def toggle_connection():
     except serial.SerialException as e:
         print(f"ERROR: Error opening serial port {selected_port}: {e}")
         if hasattr(app, 'connect_button'):
-            app.connect_button.text = "Connection\nfailed" # Zeilenumbruch hinzugefügt
+            app.connect_button.text = "Connection\nfailed!" # Zeilenumbruch hinzugefügt
             app.connect_button.text_color = "#EF5350" # Red
         ser = None # Ensure ser is None if connection fails
         if hasattr(app, 'enable_cyclic_reading'): app.enable_cyclic_reading.value = 0 # Uncheck if connection fails
@@ -104,7 +148,7 @@ def toggle_connection():
     except Exception as e: # Other unexpected errors
         print(f"ERROR: Unexpected error during serial initialization ({selected_port}): {e}")
         if hasattr(app, 'connect_button'):
-            app.connect_button.text = "Unexpected\nerror" # Zeilenumbruch hinzugefügt
+            app.connect_button.text = "Unexpected\nerror!" # Zeilenumbruch hinzugefügt
             app.connect_button.text_color = "#EF5350" # Red
         ser = None
         if hasattr(app, 'enable_cyclic_reading'): app.enable_cyclic_reading.value = 0
@@ -150,7 +194,7 @@ def send_serial_command(command_char): # Wrapper for external calls
 
 def cleanup():
     """Cleanup tasks when closing the application."""
-    global ser, connected_port, log_mode_active
+    global ser, connected_port, log_mode_active, spectrum_window_instance, memory_viewer_window_instance
     print("INFO: Application is closing.")
     # Ensure app.tk exists before trying to access winfo_exists
     # and also ensure app itself is not None
@@ -171,6 +215,11 @@ def cleanup():
         ser.close()
         print(f"Serial port {connected_port} closed.")
         connected_port = None
+    if spectrum_window_instance and spectrum_window_instance.window.tk.winfo_exists():
+        spectrum_window_instance.window.destroy()
+    if memory_viewer_window_instance and memory_viewer_window_instance.window.tk.winfo_exists(): # Renamed
+        memory_viewer_window_instance.window.destroy()
+
     if app_exists and app.tk.winfo_exists(): # Check if the window still exists
         app.destroy()
     sys.exit(0) # Clean exit
@@ -215,6 +264,7 @@ def format_volume_display(volume_value):
 
 def parse_and_update_radio_status(log_string):
     """Parses the log string from the radio and updates GUI elements."""
+    global current_radio_frequency_khz, current_radio_band_name, current_radio_step_size_str, current_radio_mode_str
     # If not connected, don't try to update the GUI with potentially stale data
     if not (ser and ser.is_open):
         # This check helps prevent updates if data arrives after a disconnect
@@ -231,6 +281,12 @@ def parse_and_update_radio_status(log_string):
 
         # Extracting some key values (indices are 0-based) - comments for clarity
         fw_version = parts[0]
+        
+        # Store raw values for potential use by other modules like spectrum analyzer
+        current_radio_frequency_khz = int(parts[1])
+        current_radio_band_name = parts[4].strip()
+        current_radio_step_size_str = parts[6]
+        current_radio_mode_str = parts[5].strip() # Store current mode
         current_frequency_khz = int(parts[1])
         try:
             current_bfo_hz = int(parts[2])
@@ -300,6 +356,13 @@ def parse_and_update_radio_status(log_string):
         if hasattr(app, 'status_signal'):
             app.status_signal.value = f"RSSI: {rssi}dBuV, SNR: {snr}dB"
 
+        # If spectrum window is open and sweeping, pass data to it
+        # global spectrum_window_instance # Already declared global at module level
+        if spectrum_window_instance is not None and spectrum_window_instance.sweeping_active:
+            # current_frequency_khz is already numeric from the top of this function
+            # rssi is also numeric
+            spectrum_window_instance.add_data_point(current_frequency_khz, rssi)
+
     except ValueError as e:
         print(f"ERROR: Error parsing numeric value in log string: {log_string} - {e}")
     except IndexError as e:
@@ -348,13 +411,584 @@ def toggle_cyclic_reading():
     else:
         print("INFO: Log mode already in requested state.")
 
+def parse_step_size_to_khz(step_str):
+    step_str = str(step_str).lower().strip()
+    val_str = ""
+    unit_chars = [] # Collect unit characters
+
+    for char in step_str:
+        if char.isdigit() or char == '.':
+            val_str += char
+        else:
+            unit_chars.append(char)
+    
+    unit = "".join(unit_chars)
+
+    if not val_str: return 1.0 # Default if no numeric part
+
+    try:
+        value = float(val_str)
+        if "khz" in unit:
+            return value
+        elif "mhz" in unit or unit == "m": # Handle "MHz" or "M" for step size
+            return value * 1000.0
+        elif "hz" in unit:
+            return value / 1000.0
+        else: # Assume kHz if no unit or unknown unit and value seems reasonable for kHz
+            if value < 1000: # Heuristic: if it's a small number, assume kHz
+                 return value
+            else: # If it's a large number without unit, assume Hz
+                 return value / 1000.0
+    except ValueError:
+        print(f"WARN: Could not parse step size: {step_str}")
+        return 1.0 # Default step
+
+class SpectrumWindow:
+    def __init__(self, master_app_ref, initial_band_name, initial_freq_khz, initial_step_size_str, band_min_khz, band_max_khz):
+        self.master_app = master_app_ref
+        self.band_name = initial_band_name # Actual band name like "VHF"
+
+        self.is_vhf = (initial_band_name == "VHF") # True if VHF band
+        self.display_unit = "MHz" if self.is_vhf else "kHz" # Unit for display
+        self.freq_divisor = 1000.0 if self.is_vhf else 1.0 # Divisor for display unit conversion
+
+        # Convert initial_freq_khz (from radio, parts[1]) to actual kHz for internal use
+        # For VHF (FM), radio sends in 10kHz units, so multiply by 10. Others are already in kHz.
+        self.current_sweep_freq_khz = float(initial_freq_khz) * 10.0 if self.is_vhf else float(initial_freq_khz)
+        
+        self.parsed_step_size_khz = float(parse_step_size_to_khz(initial_step_size_str))
+        if self.parsed_step_size_khz <= 0:
+            print("WARN: Invalid step size for spectrum (<=0), defaulting to 1kHz.")
+            self.parsed_step_size_khz = 1.0
+        
+        self.target_min_freq_khz = float(band_min_khz) # Already in actual kHz
+        self.target_max_freq_khz = float(band_max_khz) # Already in actual kHz
+
+        self.spectrum_data = {} # Dictionary: {freq_khz: rssi}
+        self.fill_collection = None # To store the fill_between artist
+        self.sweeping_active = False
+
+        self.window = Window(self.master_app, title=f"Spectrum Analyzer: {self.band_name}-Band", width=800, height=600)
+        self.window.bg = self.master_app.bg # Match theme
+        self.window.when_closed = self.on_close
+        self.window.tk.resizable(False, False) # Make the spectrum window not resizable
+
+        self.window.tk.config(padx=12, pady=12) # Add padding to the spectrum window
+        # Matplotlib Figure and Canvas
+        self.fig = Figure(figsize=(7.8, 5), dpi=100, facecolor=self.master_app.bg)
+        self.ax = self.fig.add_subplot(111)
+        self.ax.set_facecolor('#3C3C3C')
+        self.ax.tick_params(axis='x', colors=dark_theme_text_color)
+        self.ax.tick_params(axis='y', colors=dark_theme_text_color)
+        self.ax.xaxis.label.set_color(dark_theme_text_color)
+        self.ax.yaxis.label.set_color(dark_theme_text_color)
+        self.ax.title.set_color(dark_theme_text_color)
+        for spine in self.ax.spines.values():
+            spine.set_edgecolor(dark_theme_text_color)
+        
+        # Display values are derived from actual kHz internal values
+        # Step size is now always displayed in kHz
+        display_min_freq_title = self.target_min_freq_khz / self.freq_divisor 
+        display_max_freq_title = self.target_max_freq_khz / self.freq_divisor 
+        
+        self.ax.set_xlabel(f"Frequency ({self.display_unit}) - Step: {int(self.parsed_step_size_khz)}kHz")
+        self.ax.set_ylabel("RSSI (dBuV)")
+        self.ax.set_title(f"Band: {self.band_name} ({display_min_freq_title:.1f} - {display_max_freq_title:.1f}{self.display_unit})")
+        self.ax.grid(True, linestyle='--', color='#555555')
+        
+        # Set initial Y-axis limits
+        self.initial_y_min = 0
+        self.initial_y_max = 100 # Default max RSSI for initial display or when no data
+        self.min_dynamic_y_max = 30 # Minimum upper Y-axis limit when data is present
+        self.y_axis_padding = 5     # Padding above max RSSI when data is present
+        self.peak_markers = [] # To store matplotlib text objects for peak markers
+        self.ABSOLUTE_MIN_PEAK_RSSI = 10  # dBuV, absolute minimum RSSI for a peak
+        self.show_peaks_enabled = True # Controls whether peaks are shown
+        self.USE_DYNAMIC_THRESHOLD = True # Flag to enable dynamic threshold calculation
+        self.DYNAMIC_THRESHOLD_OFFSET_DB = 5 # dBuV, how much above average RSSI for dynamic threshold
+        self.LOCAL_AVERAGE_WINDOW_HALF_SIZE = 15 # Number of steps +/- for local average RSSI calculation (Test: increased from 10)
+        self.ax.set_ylim(self.initial_y_min, self.initial_y_max)
+
+        # Set initial X-axis limits to exact band limits
+        display_min_freq_init = self.target_min_freq_khz / self.freq_divisor
+        display_max_freq_init = self.target_max_freq_khz / self.freq_divisor
+        self.ax.set_xlim(display_min_freq_init, display_max_freq_init)
+        self.line, = self.ax.plot([], [], color="#00FFFF", linestyle='-') # Cyan line, markers removed
+
+        plot_box = Box(self.window, width="fill", height="fill", border=0)
+        self.canvas = FigureCanvasTkAgg(self.fig, master=plot_box.tk) # Use plot_box.tk
+        self.canvas_widget = self.canvas.get_tk_widget()
+        self.canvas_widget.pack(side="top", fill="both", expand=True)
+        self.fig.tight_layout()
+
+        controls_box = Box(self.window, layout="grid", width="fill", align="bottom")
+        self.start_button = PushButton(controls_box, text="Start Sweep", command=self.start_sweep, grid=[0,0], align="left")
+        self.start_button.bg = dark_theme_button_bg
+        self.start_button.text_color = dark_theme_text_color
+        self.stop_button = PushButton(controls_box, text="Stop Sweep", command=self.stop_sweep, grid=[1,0], enabled=False, align="left")
+        self.stop_button.bg = dark_theme_button_bg
+        self.stop_button.text_color = dark_theme_text_color
+
+        # Spacer between buttons and checkbox
+        Text(controls_box, text="  ", grid=[2,0]) 
+
+        self.show_peaks_checkbox = CheckBox(controls_box, text="Show Peaks", command=self._toggle_peak_display_command, grid=[3,0], align="left")
+        self.show_peaks_checkbox.value = 1 # Checked by default
+        self.show_peaks_checkbox.text_color = dark_theme_text_color
+
+        # Add a spacer Text widget before the status label for padding
+        Text(controls_box, text="  ", grid=[4,0]) # Spacer, moved one column to the right
+        self.status_label = Text(controls_box, text=f"Idle, ready to sweep {self.band_name}-Band!", grid=[5,0], align="left", width="fill") # Moved one column to the right
+        self.status_label.text_color = dark_theme_text_color
+
+    def _toggle_peak_display_command(self):
+        self.show_peaks_enabled = (self.show_peaks_checkbox.value == 1)
+        self.update_plot()
+
+    def start_sweep(self):
+        if not (ser and ser.is_open):
+            self.status_label.value = "Error: Radio not connected!"
+            # self.master_app.warn("Spectrum", "Radio not connected.") # User requested no app.warn
+            print("WARN: Spectrum: Radio not connected.")
+            return
+        if self.sweeping_active:
+            return
+
+        self.sweeping_active = True
+        # self.clear_peak_markers() # Clear markers when a new sweep starts - update_plot will handle this based on show_peaks_enabled
+        self.spectrum_data = {} # Clear previous sweep data
+        # Reset current_sweep_freq_khz from global radio status (which is parts[1])
+        # Convert to actual kHz if VHF
+        if self.is_vhf:
+            self.current_sweep_freq_khz = float(current_radio_frequency_khz) * 10.0
+        else:
+            self.current_sweep_freq_khz = float(current_radio_frequency_khz)
+        
+        self.status_label.value = f"Sweeping {self.band_name}-Band!"
+        self.start_button.enabled = False
+        self.stop_button.enabled = True
+        self.update_plot() # Clear plot
+        self.perform_next_step()
+
+    def stop_sweep(self):
+        self.sweeping_active = False
+        self.status_label.value = "Sweeping stopped!"
+        self.start_button.enabled = True
+        self.stop_button.enabled = False
+
+    def perform_next_step(self):
+        if not self.sweeping_active:
+            return
+
+        # The actual current_sweep_freq_khz will be updated by add_data_point from radio's report
+        # This check is more of a pre-condition before sending command
+        # We no longer stop at target_max_freq_khz. The sweep is continuous
+        # until the user presses "Stop Sweep". The radio handles band wrapping.
+        
+        send_serial_command_internal('R') # Send "Encoder Rotate Right"
+
+    def add_data_point(self, freq_khz_from_radio, rssi): # freq_khz_from_radio is current_radio_frequency_khz (parts[1])
+        if not self.sweeping_active:
+            return
+
+        # Convert freq_khz_from_radio (which is parts[1] from radio log) to actual kHz for internal storage and use
+        reported_freq_actual_khz = 0.0
+        if self.is_vhf:
+            reported_freq_actual_khz = float(freq_khz_from_radio) * 10.0
+        else:
+            reported_freq_actual_khz = float(freq_khz_from_radio)
+            
+        self.current_sweep_freq_khz = reported_freq_actual_khz # This is now actual kHz
+        self.spectrum_data[reported_freq_actual_khz] = rssi # Store/update RSSI for this frequency
+        
+        self.update_plot()
+        
+        # Status label should reflect the frequency for which data was just plotted
+        display_current_freq_status = self.current_sweep_freq_khz / self.freq_divisor # self.current_sweep_freq_khz is already adjusted
+        self.status_label.value = f"Sweeping {self.band_name}-Band! Last values: {display_current_freq_status:.1f}{self.display_unit}, RSSI: {rssi}dBuV."
+        if self.sweeping_active:
+            self.master_app.after(100, self.perform_next_step) # Delay before next step
+            #self.master_app.after(0, self.perform_next_step) # Delay before next step
+
+    def clear_peak_markers(self):
+        for marker in self.peak_markers:
+            marker.remove()
+        self.peak_markers.clear()
+
+    def _add_peak_markers(self, freqs_for_plot, rssis_for_plot):
+        self.clear_peak_markers() # Clear previous markers
+        # print(f"Debug Peak: _add_peak_markers called. Freqs: {len(freqs_for_plot)}, RSSIs: {len(rssis_for_plot)}")
+
+        if not freqs_for_plot or len(freqs_for_plot) < 3: # Need at least 3 points for local max
+            # if freqs_for_plot: print(f"Debug Peak: Not enough data points for peak detection ({len(freqs_for_plot)}).")
+            return
+
+        peaks_found_this_run = 0
+
+        # The main loop for peak detection iterates from the second point to the second-to-last point.
+        # For each point, we will calculate a local average RSSI if dynamic thresholding is enabled.
+
+        for i in range(1, len(rssis_for_plot) - 1):
+            current_rssi = rssis_for_plot[i]
+            prev_rssi = rssis_for_plot[i-1]
+            next_rssi = rssis_for_plot[i+1]
+
+            # Calculate effective minimum RSSI threshold for the current point i
+            effective_min_rssi_for_peak = self.ABSOLUTE_MIN_PEAK_RSSI
+            if self.USE_DYNAMIC_THRESHOLD:
+                # Define the window for local average calculation
+                start_index = max(0, i - self.LOCAL_AVERAGE_WINDOW_HALF_SIZE)
+                end_index = min(len(rssis_for_plot), i + self.LOCAL_AVERAGE_WINDOW_HALF_SIZE + 1)
+                local_rssis_window = rssis_for_plot[start_index:end_index]
+
+                if local_rssis_window: # Ensure the window is not empty
+                    local_average_rssi = sum(local_rssis_window) / len(local_rssis_window)
+                    dynamic_threshold = local_average_rssi + self.DYNAMIC_THRESHOLD_OFFSET_DB
+                    effective_min_rssi_for_peak = max(self.ABSOLUTE_MIN_PEAK_RSSI, dynamic_threshold)
+                    # print(f"Debug Peak @{freqs_for_plot[i]:.1f}{self.display_unit}: LocalAvgRSSI={local_average_rssi:.1f}, DynThresh={dynamic_threshold:.1f}, EffMinRSSI={effective_min_rssi_for_peak:.1f}")
+
+            # New condition for fatter peaks (replaces is_local_max and sufficiently_prominent)
+            # A point is a peak if it's >= neighbors and strictly > at least one neighbor (not flat)
+            is_fatter_peak = (current_rssi >= prev_rssi and current_rssi >= next_rssi and \
+                               (current_rssi > prev_rssi or current_rssi > next_rssi))
+            
+            above_effective_min_threshold = current_rssi > effective_min_rssi_for_peak
+
+            # if i < 5 or i > len(rssis_for_plot) - 6 : # Print for first/last few points
+            marked_this_point = False
+            if is_fatter_peak and above_effective_min_threshold:
+                peak_freq_display = freqs_for_plot[i]
+                
+                if self.is_vhf: # MHz
+                    marker_text = f"{peak_freq_display:.2f}" 
+                else: # kHz
+                    marker_text = f"{peak_freq_display:.1f}"
+                
+                # print(f"Debug Peak: Adding marker for Freq={peak_freq_display:.2f}, RSSI={current_rssi:.1f}")
+                peaks_found_this_run += 1
+                text_y_offset = (self.ax.get_ylim()[1] - self.ax.get_ylim()[0]) * 0.035 # 3.5% of y-axis range for offset
+                marker = self.ax.text(peak_freq_display, current_rssi + text_y_offset, marker_text,
+                                      color='yellow', fontsize=7, ha='center', va='bottom',
+                                      bbox=dict(boxstyle="round,pad=0.15", fc="#1A1A1A", ec="yellow", alpha=0.7))
+                self.peak_markers.append(marker)
+                marked_this_point = True
+        
+        # if peaks_found_this_run > 0:
+        #     print(f"Debug Peak: Added {peaks_found_this_run} markers in this update.")
+
+            # Debugging for high points that are not marked:
+            # Only print if the point was above the general RSSI threshold but didn't meet other criteria.
+            if not marked_this_point and current_rssi > self.ABSOLUTE_MIN_PEAK_RSSI: # Check against absolute min to reduce noise
+                pass # Add pass statement if the block is intentionally empty for now
+                # print(f"Debug Peak (High, Not Marked): Freq={freqs_for_plot[i]:.2f}, RSSI={current_rssi:.1f} (Prev={prev_rssi:.1f}, Next={next_rssi:.1f})")
+                # print(f"  Conditions: IsFatterPeak={is_fatter_peak}, AboveEffectiveMin={above_effective_min_threshold} (EffectiveMinThresh={effective_min_rssi_for_peak:.1f})")
+
+    def update_plot(self):
+        if not self.spectrum_data: # No data or cleared
+            self.line.set_data([], [])
+            self.clear_peak_markers() # Clear markers if no data
+        else:
+            # Sort frequencies for a consistent plot line
+            sorted_frequencies = sorted(self.spectrum_data.keys())
+            freqs_for_plot = [f / self.freq_divisor for f in sorted_frequencies]
+            rssis_for_plot = [self.spectrum_data[f] for f in sorted_frequencies]
+            self.line.set_data(freqs_for_plot, rssis_for_plot)
+
+            # Remove old fill collection if it exists
+            if self.fill_collection:
+                self.fill_collection.remove()
+                self.fill_collection = None
+
+            # Add new fill_between collection
+            if freqs_for_plot and rssis_for_plot: # Ensure there's data to fill
+                self.fill_collection = self.ax.fill_between(
+                    freqs_for_plot,
+                    rssis_for_plot,
+                    y2=0,  # Fill down to the 0 dBuV level
+                    color="#00FFFF",  # Cyan, same as line color
+                    alpha=0.2,       # Adjust transparency as desired
+                    zorder=self.line.get_zorder() - 1 # Ensure fill is behind the line
+                )
+            # Add peak markers if enabled and data exists
+            if self.show_peaks_enabled and self.spectrum_data and freqs_for_plot:
+                self._add_peak_markers(freqs_for_plot, rssis_for_plot)
+            else:
+                self.clear_peak_markers() # Clear if peaks disabled OR no data to mark
+        
+        self.ax.relim()
+        self.ax.autoscale_view(scalex=True, scaley=False) # Autoscale X, but not Y initially
+
+        # Set x-axis limits to exact band limits
+        display_min_freq = self.target_min_freq_khz / self.freq_divisor
+        display_max_freq = self.target_max_freq_khz / self.freq_divisor
+        self.ax.set_xlim(display_min_freq, display_max_freq)
+
+        # Adjust Y-axis limits dynamically
+        if self.spectrum_data:
+            max_rssi_in_data = max(self.spectrum_data.values())
+            
+            # Calculate the desired upper limit based on data and padding
+            calculated_y_max_with_padding = max_rssi_in_data + self.y_axis_padding
+            # Ensure the upper limit isn't too small, but can shrink below initial_y_max
+            new_y_max = max(self.min_dynamic_y_max, calculated_y_max_with_padding)
+            
+            self.ax.set_ylim(self.initial_y_min, new_y_max) # Lower limit remains initial_y_min (0)
+        else:
+            # If no data (e.g., after stop/clear or before first data), stick to initial 0-100 limits
+            self.ax.set_ylim(self.initial_y_min, self.initial_y_max)
+
+        self.fig.canvas.draw_idle()
+    
+    def on_close(self):
+        global spectrum_window_instance
+        self.stop_sweep()
+        self.clear_peak_markers() # Clear markers when closing
+        spectrum_window_instance = None
+        self.window.destroy()
+
+# --- Memory Viewer Window ---
+class MemoryViewerWindow:
+    def __init__(self, master_app_ref):
+        self.master_app = master_app_ref
+        self.window = Window(self.master_app, title="Memory Viewer", width=245, height=245) # Adjusted title and height
+        self.window.bg = self.master_app.bg 
+        self.window.when_closed = self.on_close
+        self.window.tk.resizable(False, False) # Make the MemoryViewerWindow not resizable
+        self.window.tk.config(padx=12, pady=12)
+
+        self.memory_slots_data = {} # Stores {slot_num_int: {"band": "VHF", "freq_hz": 107900000, "mode": "FM"}}
+
+        # --- Layout ---
+        # Changed top_controls_box to default (vertical) layout instead of grid
+        top_controls_box = Box(self.window, width="fill", align="top",) 
+        
+        # Button directly in top_controls_box, aligned left
+        self.load_button = PushButton(
+            top_controls_box, # Parent is top_controls_box
+            text="Load Memories from Radio", 
+            command=self.load_memories,
+            width="20"  # Make the button take the full width
+        )
+        self.load_button.bg = dark_theme_button_bg
+        self.load_button.text_color = dark_theme_text_color
+
+        # Spacer between button and status_label
+        Box(top_controls_box, height=5, width="fill")
+        # Status label, will be below the spacer
+        self.status_label = Text(top_controls_box, text="Load memories to view.", align="left", width="fill")
+        self.status_label.text_color = dark_theme_text_color
+
+        # Another Leerzeile (Spacer) directly under the status_label
+        Box(top_controls_box, height=5, width="fill") # Small spacer
+        
+        # Spacer
+        Box(self.window, width="fill", height=10, align="top") # Vertical spacer
+
+        main_box = Box(self.window, layout="grid", width="fill", height="fill", align="top")
+        # Configure column weights for main_box:
+        # Single column that spans the full width for stacked elements
+        main_box.tk.grid_columnconfigure(0, weight=1)
+
+        current_main_row = 0
+
+        # Label for memory slot selection
+        Text(main_box, text="Memory Slots (01-32):", grid=[0, current_main_row], align="left", width="fill").text_color = dark_theme_text_color
+        current_main_row += 1
+        
+        # Combo for memory slot selection, now on its own line
+        combo_items = [f"Slot {i:02d}" for i in range(1, 33)]
+        self.slot_selector_combo = Combo(
+            main_box, 
+            options=combo_items,
+            selected=combo_items[0], # Default to Slot 01
+            width="fill", # Fill available width
+            grid=[0, current_main_row], # Dropdown in column 0, on the next line
+            command=self.on_slot_selected,
+            align="left"
+        )
+        self.slot_selector_combo.bg = dark_theme_combo_bg
+        self.slot_selector_combo.text_color = dark_theme_combo_text_color
+        current_main_row += 1
+
+        Box(main_box, grid=[0, current_main_row], height=10, width="fill") # Spacer, spans 1 column
+        current_main_row += 1 
+
+        editor_fields_box = Box(main_box, layout="grid", grid=[0, current_main_row], align="left", width="fill") # Below spacer, spans 1 column
+        # Configure column weights for editor_fields_box for stability
+        editor_fields_box.tk.grid_columnconfigure(0, weight=0)  # Column for labels (fixed width)
+        editor_fields_box.tk.grid_columnconfigure(1, weight=1)  # Column for values (fills remaining space)
+        
+        current_edit_row = 0
+        Text(editor_fields_box, text="Selected Slot:    ", grid=[0,current_edit_row], align="left", width="fill").text_color = dark_theme_text_color
+        self.selected_slot_text = Text(editor_fields_box, text="--", grid=[1,current_edit_row], align="left", width="fill") # align="left" hinzugefügt
+        self.selected_slot_text.text_color = dark_theme_text_color
+        current_edit_row+=1
+
+        # Display fields
+        Text(editor_fields_box, text="Frequency:", grid=[0,current_edit_row], align="left", width="fill").text_color = dark_theme_text_color
+        self.freq_display = Text(editor_fields_box, text="---", grid=[1,current_edit_row], align="left", width="fill") # Now in column 1
+        self.freq_display.text_color = dark_theme_text_color
+        current_edit_row+=1
+
+        Text(editor_fields_box, text="Band:", grid=[0,current_edit_row], align="left", width="fill").text_color = dark_theme_text_color
+        self.band_display = Text(editor_fields_box, text="---", grid=[1,current_edit_row], align="left", width="fill") # Now in column 1
+        self.band_display.text_color = dark_theme_text_color
+        current_edit_row+=1
+
+        Text(editor_fields_box, text="Mode:", grid=[0,current_edit_row], align="left", width="fill").text_color = dark_theme_text_color
+        self.mode_display = Text(editor_fields_box, text="---", grid=[1,current_edit_row], align="left", width="fill") # align="left" hinzugefügt
+        self.mode_display.text_color = dark_theme_text_color
+        current_edit_row+=1
+
+        # Initial selection to trigger on_slot_selected and populate fields for Slot 01
+        self.on_slot_selected(self.slot_selector_combo.value)
+
+    def load_memories(self):
+        if not (ser and ser.is_open):
+            self.status_label.value = "Error: Radio not connected."
+            # self.master_app.warn("Memory Viewer", "Radio not connected.") # User requested no app.warn
+            print("WARN: Memory Viewer: Radio not connected during load_memories.")
+            return
+
+        self.status_label.value = "Sending '$' to radio..."
+        if not send_serial_command_internal('$'): # Use internal to get return status
+            self.status_label.value = "Error: Failed to send '$' command."
+            return
+
+        self.status_label.value = "Waiting for memory data!"
+        self.master_app.update() # Force GUI update - Corrected method name
+
+        self.memory_slots_data.clear() # Clear previous data
+        
+        original_timeout = ser.timeout
+        ser.timeout = 0.5  # Set a readline timeout (e.g., 500ms)
+
+        lines_processed_count = 0
+        
+        # Expect up to 32 lines for the memory slots
+        for i in range(32): # Iterate 32 times, once for each potential slot
+            try:
+                line_bytes = ser.readline()
+                if not line_bytes: # Timeout, no more data for this slot or end of transmission
+                    print(f"MemRead: Timeout waiting for slot {i+1} data.")
+                    break 
+                
+                line = line_bytes.decode('ascii', errors='ignore').strip()
+                if not line: # Empty line received
+                    print(f"MemRead: Empty line received for slot {i+1}.")
+                    continue 
+
+                print(f"MemRead Raw Line {i+1}: {line}") # Debug
+
+                parts = line.split(',')
+                
+                # Try parsing as: SlotNum,Band,FreqHz,Mode (4 parts)
+                if len(parts) == 4:
+                    try:
+                        slot_num_from_radio_str = parts[0].strip()
+                        # Handle potential leading '#' character
+                        if slot_num_from_radio_str.startswith('#'):
+                            slot_num_from_radio_str = slot_num_from_radio_str[1:]
+                        slot_num = int(slot_num_from_radio_str.lstrip('0') if slot_num_from_radio_str.lstrip('0') else "0") # "00" -> 0
+                        band = parts[1].strip()
+                        freq_hz = int(parts[2].strip())
+                        mode = parts[3].strip()
+
+                        if 1 <= slot_num <= 32:
+                            if freq_hz != 0 and band: # Freq 0 or empty band means empty slot
+                                self.memory_slots_data[slot_num] = {"band": band, "freq_hz": freq_hz, "mode": mode}
+                                lines_processed_count +=1
+                            else:
+                                print(f"MemRead: Slot {slot_num} is empty (freq 0 or no band).")
+                        else:
+                             print(f"MemRead: Invalid slot number {slot_num} from radio on line: {line}")
+                    except ValueError as ve:
+                        print(f"MemRead: ValueError parsing 4-part slot data '{line}': {ve}")
+                    except IndexError:
+                        print(f"MemRead: IndexError parsing 4-part slot data '{line}'.")
+                # Try parsing as: Band,FreqHz,Mode (3 parts), slot number is i+1
+                elif len(parts) == 3:
+                    slot_num = i + 1 # Slot number is implicit by line order
+                    try:
+                        band = parts[0].strip()
+                        freq_hz = int(parts[1].strip())
+                        mode = parts[2].strip()
+                        if freq_hz != 0 and band:
+                             self.memory_slots_data[slot_num] = {"band": band, "freq_hz": freq_hz, "mode": mode}
+                             lines_processed_count +=1
+                        else:
+                            print(f"MemRead: Slot {slot_num} (implicit) is empty (freq 0 or no band).")
+                    except ValueError as ve:
+                        print(f"MemRead: ValueError parsing 3-part slot data '{line}': {ve}")
+                    except IndexError:
+                        print(f"MemRead: IndexError parsing 3-part slot data '{line}'.")
+                else:
+                    print(f"MemRead: Ignoring line with unexpected format ({len(parts)} parts): {line}")
+
+            except serial.SerialException as e:
+                self.status_label.value = f"Serial error: {e}"
+                print(f"MemRead: SerialException: {e}")
+                break 
+            except Exception as e: 
+                self.status_label.value = f"Error: {e}"
+                print(f"MemRead: Exception: {e}")
+                break 
+        
+        ser.timeout = original_timeout # Restore original timeout
+        
+        # After loading, re-select the current combo value to refresh editor fields
+        current_selection = self.slot_selector_combo.value
+        self.on_slot_selected(current_selection) # This will update status and fields
+
+        if lines_processed_count > 0:
+            self.status_label.value = f"Loaded {lines_processed_count} Memory slot(s)!"
+        elif not self.memory_slots_data: 
+            self.status_label.value = "No Memory Slots loaded or all are empty."
+        else: 
+             self.status_label.value = "All Memory Slots appear to be empty."
+
+    def on_slot_selected(self, selected_value):
+        if not selected_value: return
+
+        try:
+            # Parse slot number from listbox string "Slot XX: ..."
+            slot_num_str = selected_value.replace("Slot", "").strip() # Combo value is "Slot XX"
+            slot_num = int(slot_num_str)
+            self.selected_slot_text.value = f"{slot_num:02d}" 
+
+            if slot_num in self.memory_slots_data:
+                data = self.memory_slots_data[slot_num]
+                # Format frequency for editing field
+                if data["mode"] == "FM": # Show in MHz for FM
+                    self.freq_display.value = f"{data['freq_hz'] / 1000000.0:.3f} MHz"
+                else: # Show in kHz for AM/SSB
+                    self.freq_display.value = f"{data['freq_hz'] / 1000.0:.1f} kHz"
+                
+                self.band_display.value = data["band"]
+                self.mode_display.value = data["mode"]
+                self.status_label.value = f"Viewing Slot {slot_num:02d}."
+            else: 
+                self.freq_display.value = "---"
+                self.band_display.value = "---"
+                self.mode_display.value = "---"
+                self.status_label.value = f"Slot {slot_num:02d} is empty."
+        except Exception as e:
+            print(f"Error in on_slot_selected: {e} (Selected: '{selected_value}')")
+            self.status_label.value = "Error selecting slot."
+            self.selected_slot_text.value = "--"
+            self.freq_display.value = "---"
+            self.band_display.value = "---"
+            self.mode_display.value = "---"
+
+    def on_close(self):
+        global memory_viewer_window_instance # Renamed
+        memory_viewer_window_instance = None
+        self.window.destroy()
 
 # --- GUI Setup ---
-# script_dir = os.path.dirname(__file__) # No longer needed as icon is removed
-
 # Colors for Dark Theme
 # Window height adjusted for new status fields
-app = App(title="Mini-Radio Control", width=410, height=878, layout="grid") # Height slightly increased
+app = App(title="Mini-Radio Control", width=420, height=930, layout="grid") # Height slightly increased
 app.bg = '#2E2E2E' # Dark background for Dark Theme
 dark_theme_text_color = "#E0E0E0" # Light gray for text
 dark_theme_button_bg = "#4A4A4A"  # Medium dark gray for buttons
@@ -405,7 +1039,7 @@ elif available_ports and available_ports[0] != "No ports found":
     app.port_selector.value = available_ports[-1] # Selects the last port in the list
 
 # Connect button spans two rows and has an increased height
-app.connect_button = PushButton(app, text="Connect", command=toggle_connection, grid=[2, current_grid_row, 1, 2], width=10, height=3)
+app.connect_button = PushButton(app, text="Connect", command=toggle_connection, grid=[2, current_grid_row, 1, 2], width=9, height=2, align="right")
 app.connect_button.bg = dark_theme_button_bg # Standard text color for the button
 app.connect_button.text_color = dark_theme_text_color # Standard Textfarbe für den Button
 current_grid_row += 1
@@ -417,6 +1051,122 @@ app.baud_rate_selector.bg = dark_theme_combo_bg
 app.baud_rate_selector.text_color = dark_theme_combo_text_color
 current_grid_row += 1
 
+# --- Button to Open Spectrum Analyzer ---
+Text(app, text="", grid=[0, current_grid_row, 3, 1]) # Spacer
+current_grid_row += 1
+
+# Box to hold the Memory Viewer and Spectrum Analyzer buttons side-by-side
+action_buttons_box = Box(app, layout="grid", grid=[0, current_grid_row, 3, 1], width="fill", align="top")
+action_buttons_box.tk.columnconfigure(0, weight=1)  # First button's column
+action_buttons_box.tk.columnconfigure(1, weight=1)  # Second button's column
+
+def open_memory_viewer_window(): # Renamed
+    global memory_viewer_window_instance # Renamed
+    if not (ser and ser.is_open):
+        print("WARN: Memory Viewer button pressed but not connected to radio.") # Adjusted text
+        if hasattr(app, 'connect_button'):
+            app.connect_button.text = "Not\nconnected!"
+            app.connect_button.text_color = "#FFA726" # Orange warning color
+        return
+    if memory_viewer_window_instance is not None and memory_viewer_window_instance.window.tk.winfo_exists(): # Renamed
+        # User requested no app.info
+        # print("INFO: Memory Viewer window is already open.")
+        try:
+            memory_viewer_window_instance.window.tk.focus_force() # Renamed
+            memory_viewer_window_instance.window.tk.lift() # Renamed
+        except Exception as e:
+            print(f"Could not focus/lift memory viewer window: {e}") # Adjusted text
+        return
+    memory_viewer_window_instance = MemoryViewerWindow(app) # Renamed
+
+memory_viewer_button = PushButton(
+    action_buttons_box, # Parent is the new box
+    text="Open Memory Viewer",
+    command=open_memory_viewer_window,
+    grid=[0, 0], # Column 0, Row 0 within action_buttons_box
+    width="21"
+)
+memory_viewer_button.bg = dark_theme_button_bg
+memory_viewer_button.text_color = dark_theme_text_color
+memory_viewer_button.tk.config(relief="raised", borderwidth=2) # Example: raised border with width 2
+
+def open_spectrum_analyzer_window():
+    global spectrum_window_instance, current_radio_band_name, current_radio_frequency_khz, current_radio_step_size_str, current_radio_mode_str
+    # Check for connection first
+    if not (ser and ser.is_open):
+        print("WARN: Spectrum Analyzer button pressed but not connected to radio.")
+        if hasattr(app, 'connect_button'):
+            app.connect_button.text = "Not\nconnected!" # Consistent with other buttons
+            app.connect_button.text_color = "#FFA726" # Orange warning color
+        return
+    if spectrum_window_instance is not None and spectrum_window_instance.window.tk.winfo_exists():
+        # User requested no app.info
+        # print("INFO: Spectrum window is already open.")
+        try:
+            spectrum_window_instance.window.tk.focus_force() # Bring to front
+            spectrum_window_instance.window.tk.lift()
+        except Exception as e:
+            print(f"Could not focus/lift spectrum window: {e}")
+        return
+
+    try:
+        if not current_radio_band_name or current_radio_frequency_khz is None or current_radio_step_size_str is None or current_radio_mode_str is None:
+            # app.warn("Spectrum Analyzer", "Radio status not fully available. Please wait for an update.") # User requested no app.warn
+            print("WARN: Spectrum Analyzer: Radio status not fully available. Please wait for an update.")
+            return
+
+        # Determine the band name to display and the key to use for BANDS_DATA
+        display_band_name_for_spectrum = current_radio_band_name
+        band_data_key = current_radio_band_name
+
+        # Special handling if radio reports "15M"
+        if current_radio_band_name == "15M":
+            if current_radio_mode_str == "USB":
+                band_data_key = "15M HAM" # Use data for 15M HAM
+            # If AM or other, band_data_key remains "15M", display name also "15M"
+            # display_band_name_for_spectrum remains "15M" for consistency
+
+        selected_band_info = BANDS_DATA.get(band_data_key)
+        
+        if not selected_band_info:
+            # Fallback: try to find a band that contains the current frequency
+            for name, data in BANDS_DATA.items():
+                if data["min_khz"] <= current_radio_frequency_khz <= data["max_khz"]:
+                    selected_band_info = data
+                    display_band_name_for_spectrum = name # Use the inferred band name for display
+                    print(f"INFO: Spectrum using inferred band '{name}' based on current frequency.")
+                    break
+            if not selected_band_info:
+                # Use the originally reported band name in the warning if fallback fails
+                # app.warn("Spectrum Analyzer", f"No band definition found for '{current_radio_band_name}' (mode: {current_radio_mode_str}) or current frequency. Cannot determine sweep range.") # User requested no app.warn
+                print(f"WARN: Spectrum Analyzer: No band definition found for '{current_radio_band_name}' (mode: {current_radio_mode_str}) or current frequency. Cannot determine sweep range.")
+                return
+
+        spectrum_window_instance = SpectrumWindow(
+            master_app_ref=app,
+            initial_band_name=display_band_name_for_spectrum, # This is the name shown in SpectrumWindow
+            initial_freq_khz=current_radio_frequency_khz,
+            initial_step_size_str=current_radio_step_size_str,
+            band_min_khz=selected_band_info["min_khz"],
+            band_max_khz=selected_band_info["max_khz"]
+        )
+    except Exception as e:
+        print(f"Error opening spectrum window: {e}")
+        # app.error is also a GUI popup, replace with print
+        print(f"ERROR: Spectrum Error: Could not open spectrum window: {e}")
+
+spectrum_button = PushButton(
+    action_buttons_box, # Parent is the new box
+    text="Open Spectrum Analyzer",
+    command=open_spectrum_analyzer_window,
+    grid=[1, 0], # Column 1, Row 0 within action_buttons_box
+    width="21"
+)
+spectrum_button.bg = dark_theme_button_bg
+spectrum_button.text_color = dark_theme_text_color
+spectrum_button.tk.config(relief="raised", borderwidth=2) # Example: raised border with width 2
+
+current_grid_row += 1
 
 # Empty line for spacing above the checkbox
 Text(app, text="", grid=[0, current_grid_row, 3, 1]) # Span all relevant columns
@@ -537,7 +1287,7 @@ btn_encoder_press = PushButton(
     text=encoder_press_button_text,
     command=lambda: send_serial_command(encoder_press_cmd),
     grid=[1, current_grid_row, 2, 1],  # Start in column 1, span 2 columns
-    width="23",                        # Fill the width of the spanned columns
+    width="25",                        # Fill the width of the spanned columns
     align = "right"                    # This align might not do much if width="fill" or a large width is used
 )
 btn_encoder_press.bg = dark_theme_button_bg
@@ -555,7 +1305,7 @@ for label, cmd1, txt1, cmd2, txt2, ctrl_type in controls_data:
     lbl.text_color = dark_theme_text_color
 
     # text_color is set after creation
-    button_properties = {"width": 10, "align": "right"}
+    button_properties = {"width": "11", "align": "right"}
 
     # Since "Encoder Press" (the only "single" type) is handled separately,
     # all remaining controls in controls_data are expected to be "pair".

@@ -359,9 +359,13 @@ def parse_and_update_radio_status(log_string):
         # If spectrum window is open and sweeping, pass data to it
         # global spectrum_window_instance # Already declared global at module level
         if spectrum_window_instance is not None and spectrum_window_instance.sweeping_active:
-            # current_frequency_khz is already numeric from the top of this function
+            # current_frequency_khz is int(parts[1]) - base VFO frequency
+            # current_mode is parts[5]
+            # current_bfo_hz is int(parts[2]) - BFO in Hz
             # rssi is also numeric
-            spectrum_window_instance.add_data_point(current_frequency_khz, rssi)
+            spectrum_window_instance.add_data_point(
+                current_frequency_khz, current_mode, current_bfo_hz, rssi
+            )
 
     except ValueError as e:
         print(f"ERROR: Error parsing numeric value in log string: {log_string} - {e}")
@@ -493,7 +497,7 @@ class SpectrumWindow:
         
         self.ax.set_xlabel(f"Frequency ({self.display_unit}) - Step: {int(self.parsed_step_size_khz)}kHz")
         self.ax.set_ylabel("RSSI (dBuV)")
-        self.ax.set_title(f"Band: {self.band_name} ({display_min_freq_title:.1f} - {display_max_freq_title:.1f}{self.display_unit})")
+        self.ax.set_title(f"Band: {self.band_name} ({display_min_freq_title:.0f} - {display_max_freq_title:.0f}{self.display_unit})")
         self.ax.grid(True, linestyle='--', color='#555555')
         
         # Set initial Y-axis limits
@@ -587,28 +591,41 @@ class SpectrumWindow:
         
         send_serial_command_internal('R') # Send "Encoder Rotate Right"
 
-    def add_data_point(self, freq_khz_from_radio, rssi): # freq_khz_from_radio is current_radio_frequency_khz (parts[1])
+    def add_data_point(self, base_freq_khz_parts1, mode_str, bfo_hz_parts2, rssi):
         if not self.sweeping_active:
             return
 
-        # Convert freq_khz_from_radio (which is parts[1] from radio log) to actual kHz for internal storage and use
-        reported_freq_actual_khz = 0.0
-        if self.is_vhf:
-            reported_freq_actual_khz = float(freq_khz_from_radio) * 10.0
-        else:
-            reported_freq_actual_khz = float(freq_khz_from_radio)
+        actual_tuned_khz = 0.0
+        # base_freq_khz_parts1 is int(parts[1]) from the radio log (base VFO)
+        # bfo_hz_parts2 is int(parts[2]) from the radio log (BFO in Hz)
+        # mode_str is parts[5] (e.g., "FM", "AM", "LSB", "USB")
+
+        if self.is_vhf: # This is based on initial_band_name. For VHF, mode_str is typically "FM".
+                        # Radio sends base_freq_khz_parts1 in 10kHz units for FM.
+            actual_tuned_khz = float(base_freq_khz_parts1) * 10.0
+            # For FM, bfo_hz_parts2 is usually 0. If it could be non-zero and relevant for actual frequency,
+            # it might need to be added, but current main GUI logic for FM doesn't use BFO.
+        elif mode_str in ["LSB", "USB"]:
+            # For LSB/USB, base_freq_khz_parts1 is base VFO in kHz.
+            # bfo_hz_parts2 is BFO offset in Hz.
+            actual_tuned_khz = float(base_freq_khz_parts1) + (float(bfo_hz_parts2) / 1000.0)
+        else: # AM and other non-VHF modes (e.g., CW if radio reports similarly)
+              # base_freq_khz_parts1 is the direct frequency in kHz.
+              # bfo_hz_parts2 is often 0 for AM. If non-zero, the main GUI for AM ignores it.
+              # To match main GUI AM display, spectrum should also use base VFO.
+            actual_tuned_khz = float(base_freq_khz_parts1)
             
-        self.current_sweep_freq_khz = reported_freq_actual_khz # This is now actual kHz
-        self.spectrum_data[reported_freq_actual_khz] = rssi # Store/update RSSI for this frequency
+        self.current_sweep_freq_khz = actual_tuned_khz # This is now the actual tuned frequency in kHz
+        self.spectrum_data[actual_tuned_khz] = rssi # Store/update RSSI for this actual tuned frequency
         
         self.update_plot()
         
         # Status label should reflect the frequency for which data was just plotted
+        # self.freq_divisor is 1.0 for SW (kHz display), 1000.0 for VHF (MHz display)
         display_current_freq_status = self.current_sweep_freq_khz / self.freq_divisor # self.current_sweep_freq_khz is already adjusted
         self.status_label.value = f"Sweeping {self.band_name}-Band! Last values: {display_current_freq_status:.1f}{self.display_unit}, RSSI: {rssi}dBuV."
         if self.sweeping_active:
             self.master_app.after(100, self.perform_next_step) # Delay before next step
-            #self.master_app.after(0, self.perform_next_step) # Delay before next step
 
     def clear_peak_markers(self):
         for marker in self.peak_markers:

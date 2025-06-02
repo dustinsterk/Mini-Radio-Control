@@ -506,6 +506,7 @@ class SpectrumWindow:
         self.min_dynamic_y_max = 30 # Minimum upper Y-axis limit when data is present
         self.y_axis_padding = 5     # Padding above max RSSI when data is present
         self.peak_markers = [] # To store matplotlib text objects for peak markers
+        self.min_y_axis_range = 30  # Minimum span for the Y-axis (e.g., 30 dBuV)
         self.ABSOLUTE_MIN_PEAK_RSSI = 10  # dBuV, absolute minimum RSSI for a peak
         self.show_peaks_enabled = True # Controls whether peaks are shown
         self.USE_DYNAMIC_THRESHOLD = True # Flag to enable dynamic threshold calculation
@@ -623,7 +624,16 @@ class SpectrumWindow:
         # Status label should reflect the frequency for which data was just plotted
         # self.freq_divisor is 1.0 for SW (kHz display), 1000.0 for VHF (MHz display)
         display_current_freq_status = self.current_sweep_freq_khz / self.freq_divisor # self.current_sweep_freq_khz is already adjusted
-        self.status_label.value = f"Sweeping {self.band_name}-Band! Last values: {display_current_freq_status:.1f}{self.display_unit}, RSSI: {rssi}dBuV."
+        if self.is_vhf:
+            freq_format_str = ".2f" # For MHz display
+        else: # Not VHF, display in kHz
+            if mode_str == "AM": # mode_str is an argument to add_data_point
+                freq_format_str = ".0f" # Integer display for AM in kHz
+            else: # LSB, USB, etc. on SW
+                freq_format_str = ".1f" # One decimal place for SSB etc. in kHz
+        self.status_label.value = (
+            f"Sweeping {self.band_name}-Band! Last values: {display_current_freq_status:{freq_format_str}}{self.display_unit}, RSSI: {rssi}dBuV." # Use determined freq_format_str
+        )
         if self.sweeping_active:
             self.master_app.after(100, self.perform_next_step) # Delay before next step
 
@@ -675,11 +685,16 @@ class SpectrumWindow:
             marked_this_point = False
             if is_fatter_peak and above_effective_min_threshold:
                 peak_freq_display = freqs_for_plot[i]
-                
-                if self.is_vhf: # MHz
-                    marker_text = f"{peak_freq_display:.2f}" 
-                else: # kHz
-                    marker_text = f"{peak_freq_display:.1f}"
+
+                if self.is_vhf: # Display unit is MHz
+                    marker_text = f"{peak_freq_display:.2f}"
+                else: # Display unit is kHz
+                    # Use the global current_radio_mode_str for formatting peaks,
+                    # as it reflects the mode during which data was collected.
+                    if current_radio_mode_str == "AM":
+                        marker_text = f"{peak_freq_display:.0f}" # Integer for AM in kHz
+                    else: # LSB, USB, etc. on SW
+                        marker_text = f"{peak_freq_display:.1f}" # One decimal for SSB etc. in kHz
                 
                 # print(f"Debug Peak: Adding marker for Freq={peak_freq_display:.2f}, RSSI={current_rssi:.1f}")
                 peaks_found_this_run += 1
@@ -742,14 +757,33 @@ class SpectrumWindow:
 
         # Adjust Y-axis limits dynamically
         if self.spectrum_data:
+            min_rssi_in_data = min(self.spectrum_data.values())
             max_rssi_in_data = max(self.spectrum_data.values())
             
-            # Calculate the desired upper limit based on data and padding
-            calculated_y_max_with_padding = max_rssi_in_data + self.y_axis_padding
-            # Ensure the upper limit isn't too small, but can shrink below initial_y_max
-            new_y_max = max(self.min_dynamic_y_max, calculated_y_max_with_padding)
+            # Tentative y_min and y_max based on data and padding
+            tentative_y_min = min_rssi_in_data - self.y_axis_padding
+            tentative_y_max = max_rssi_in_data + self.y_axis_padding
             
-            self.ax.set_ylim(self.initial_y_min, new_y_max) # Lower limit remains initial_y_min (0)
+            # Ensure y_max is not too low
+            final_y_max = max(tentative_y_max, self.min_dynamic_y_max)
+            
+            # Initial final_y_min
+            final_y_min = tentative_y_min
+            
+            # Ensure minimum range
+            if final_y_max - final_y_min < self.min_y_axis_range:
+                # Calculate the midpoint of the actual data range
+                data_midpoint = (min_rssi_in_data + max_rssi_in_data) / 2.0
+                # Expand around data midpoint
+                final_y_min = data_midpoint - (self.min_y_axis_range / 2.0)
+                final_y_max = data_midpoint + (self.min_y_axis_range / 2.0)
+                
+                # Re-ensure y_max is not too low after range adjustment
+                final_y_max = max(final_y_max, self.min_dynamic_y_max)
+                # If y_max was pushed up, ensure y_min maintains the range by adjusting it downwards if necessary
+                final_y_min = min(final_y_min, final_y_max - self.min_y_axis_range)
+
+            self.ax.set_ylim(final_y_min, final_y_max)
         else:
             # If no data (e.g., after stop/clear or before first data), stick to initial 0-100 limits
             self.ax.set_ylim(self.initial_y_min, self.initial_y_max)
@@ -976,10 +1010,14 @@ class MemoryViewerWindow:
             if slot_num in self.memory_slots_data:
                 data = self.memory_slots_data[slot_num]
                 # Format frequency for editing field
-                if data["mode"] == "FM": # Show in MHz for FM
-                    self.freq_display.value = f"{data['freq_hz'] / 1000000.0:.3f} MHz"
-                else: # Show in kHz for AM/SSB
+                mode = data["mode"]
+                freq_hz = data['freq_hz']
+                if mode == "FM": # Show in MHz for FM
+                    self.freq_display.value = f"{freq_hz / 1000000.0:.2f} MHz" # Consistent: 2 decimal places
+                elif mode in ["LSB", "USB"]: # Show in kHz for SSB
                     self.freq_display.value = f"{data['freq_hz'] / 1000.0:.1f} kHz"
+                else:  # Show in kHz for AM and other SW modes (integer)
+                    self.freq_display.value = f"{data['freq_hz'] / 1000.0:.0f} kHz" # Consistent: 0 decimal places
                 
                 self.band_display.value = data["band"]
                 self.mode_display.value = data["mode"]

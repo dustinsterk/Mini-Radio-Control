@@ -118,23 +118,55 @@ def toggle_connection():
             app.connect_button.text = "Disconnect" # Button now shows "Disconnect"
             app.connect_button.text_color = "#66BB6A" # Grün
 
-        # Automatically attempt to enable cyclic reading on successful connection
-        print("INFO: Attempting to enable cyclic reading automatically after connection.")
-        # We want logging to be ON. log_mode_active is currently False (or should be after error handling).
-        # Sending 't' should toggle the radio's logging to ON.
-        if send_serial_command_internal('t'):
-            log_mode_active = True # Now app believes logging is ON
-            if hasattr(app, 'enable_cyclic_reading'):
-                app.enable_cyclic_reading.value = 1 # Check the box
-            print("INFO: Cyclic reading enabled automatically.")
-        else:
-            # If sending 't' failed, log_mode_active remains False (or should be explicitly set)
-            # and the checkbox remains unchecked.
-            log_mode_active = False # Ensure it's false if command failed
-            if hasattr(app, 'enable_cyclic_reading'):
-                app.enable_cyclic_reading.value = 0 # Ensure box is unchecked
-            print("WARN: Failed to automatically enable cyclic reading. Please use the checkbox.")
+        # --- Enhanced logic to handle cyclic reading on connect ---
+        ser.reset_input_buffer() # Clear any stale data, as suggested by community
+        print("INFO: Serial input buffer cleared.")
 
+        initial_radio_state_is_on = False
+        original_timeout = ser.timeout
+        ser.timeout = 0.3  # Short timeout (300ms) to check for existing data stream
+        print(f"INFO: Temporarily set serial timeout to {ser.timeout}s to check for radio data.")
+
+        try:
+            line_bytes = ser.readline()
+            if line_bytes:
+                initial_radio_state_is_on = True
+                print("INFO: Radio logging appears to be initially ON (data received).")
+                # Optionally, try to parse this first line for immediate status update
+                try:
+                    log_line = line_bytes.decode('ascii', errors='ignore').strip()
+                    if log_line:
+                        print(f"INFO: Initial data line: {log_line}")
+                        parse_and_update_radio_status(log_line)
+                except Exception as e_parse:
+                    print(f"WARN: Could not parse initial data line: {e_parse}")
+            else:
+                print("INFO: Radio logging appears to be initially OFF (no data received quickly).")
+        except Exception as e_check:
+            print(f"WARN: Error checking initial radio log state: {e_check}")
+        finally:
+            ser.timeout = original_timeout # Restore original timeout
+            print(f"INFO: Serial timeout restored to {ser.timeout}s.")
+
+        if initial_radio_state_is_on:
+            # Radio is already sending data. App should reflect this.
+            log_mode_active = True
+            if hasattr(app, 'enable_cyclic_reading'):
+                app.enable_cyclic_reading.value = 1
+            print("INFO: Cyclic reading confirmed ON (was already active on radio).")
+        else:
+            # Radio logging was OFF, or we couldn't confirm. Try to turn it ON.
+            print("INFO: Attempting to enable cyclic reading on radio via 't' command.")
+            if send_serial_command_internal('t'):
+                log_mode_active = True
+                if hasattr(app, 'enable_cyclic_reading'):
+                    app.enable_cyclic_reading.value = 1
+                print("INFO: Cyclic reading enabled via 't' command.")
+            else:
+                log_mode_active = False # Ensure it's false if command failed
+                if hasattr(app, 'enable_cyclic_reading'):
+                    app.enable_cyclic_reading.value = 0 # Ensure box is unchecked
+                print("WARN: Failed to enable cyclic reading via 't' command. Please use the checkbox.")
 
     except serial.SerialException as e:
         print(f"ERROR: Error opening serial port {selected_port}: {e}")
@@ -994,9 +1026,9 @@ class MemoryViewerWindow:
         if lines_processed_count > 0:
             self.status_label.value = f"Loaded {lines_processed_count} Memory slot(s)!"
         elif not self.memory_slots_data: 
-            self.status_label.value = "No Memory Slots loaded or all are empty."
+            self.status_label.value = "No Memory Slots loaded!"
         else: 
-             self.status_label.value = "All Memory Slots appear to be empty."
+             self.status_label.value = "All Memory Slots are empty!"
 
     def on_slot_selected(self, selected_value):
         if not selected_value: return

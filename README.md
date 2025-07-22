@@ -92,7 +92,7 @@ The Spectrum Analyzer repeatedly sends an "Encoder Rotate Right" command ('R') t
     ```bash
     brew install uv
     ```
-    If you have installed python via brew, you may also need to install the following otherwise you will get an error "tkinter did not import successfully".
+    If you have installed python via brew, you may also need to install the following to avoid the error "**tkinter did not import successfully**" when running the application.
     ```
     brew install python-tk
     ```

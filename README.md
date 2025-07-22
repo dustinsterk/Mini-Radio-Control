@@ -41,6 +41,7 @@ This Python application provides a graphical user interface (GUI) to control an 
     *   "Load Memories from Radio" button fetches and displays stored memory channels (01-32).
     *   Users can select a memory slot from a dropdown to view its stored Frequency, Band, and Mode.
     *   Intelligently parses memory data, accommodating different formats (3-part or 4-part lines) that the radio might send.
+    *   The "Set" button can be used to set a memory channel once the memory is loaded for the first time.  Enter "0" for the frequency to clear a channel.
       
       ![Memory Viewer Window](memory.png)
     

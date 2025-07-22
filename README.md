@@ -88,9 +88,9 @@ The Spectrum Analyzer repeatedly sends an "Encoder Rotate Right" command ('R') t
     *   An ESP32-SI4732 based radio receiver flashed with firmware that supports serial control, the described log output format, memory dump via '$', and frequency stepping via 'R'.
 
 2.  **Installation of Dependencies:**
-    Open your terminal or command prompt and install the necessary Python libraries:
+    Open your terminal or command prompt and install uv (https://docs.astral.sh/uv/getting-started/installation/#cargo):
     ```bash
-    pip install pyserial guizero matplotlib
+    brew install uv
     ```
     If you have installed python via brew, you may also need to install the following otherwise you will get an error "tkinter did not import successfully".
     ```
@@ -100,21 +100,16 @@ The Spectrum Analyzer repeatedly sends an "Encoder Rotate Right" command ('R') t
 4.  **Running the Application:**
     *   Connect your ESP32-SI4732 radio to your computer via USB.
     *   Download or clone this repository.
-    *   Navigate to the directory containing `MiniRadio.py` (oder wie auch immer deine Hauptdatei heißt).
-    *   Run the script:
+    *   Navigate to the directory containing `ATSMiniController`.
+    *   Ensure the file is executable (one time action needed):
         ```bash
-        python3 MiniRadio.py
+        chmod +x ATSMiniController
+        ```
+    *   Run the script:
+        ```
+        ./ATSMiniController
         ```
     *   The application will attempt to auto-select a serial port and will use a default baud rate (115200). Adjust these via the dropdowns if necessary.
     *   Click the "Connect" button. It will change to "Disconnect" upon successful connection.
     *   Check the "Enable Cyclic Reading" checkbox to see live status updates from the radio.
     *   Use the buttons and feature windows to control and explore your radio.
-
-### Creating an Executable (Optional)
-You can use the single file ATSMiniController after **installing uv**.  Download the ATSMiniController file and make it executable via '**chmod +x ATSMiniController'** command in a terminal window.  Upon running the program through terminal '**./ATSMiniController**', this will create a virtual python environment, install the dependencies, and run the code.
-
-It is possible to create a standalone executable from the Python script using tools like **PyInstaller**. This has been successfully tested on Linux. This can be useful for distributing the application without requiring users to install Python or dependencies.
-
-For example, after installing PyInstaller (`pip install pyinstaller`), you might navigate to the script's directory and run a command similar to:
-```bash
-pyinstaller --onefile --windowed MiniRadio.py

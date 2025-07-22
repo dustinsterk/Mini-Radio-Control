@@ -92,8 +92,12 @@ The Spectrum Analyzer repeatedly sends an "Encoder Rotate Right" command ('R') t
     ```bash
     pip install pyserial guizero matplotlib
     ```
+    If you have installed python via brew, you may also need to install the following otherwise you will get an error "tkinter did not import successfully".
+    ```
+    brew install python-tk
+    ```
 
-3.  **Running the Application:**
+4.  **Running the Application:**
     *   Connect your ESP32-SI4732 radio to your computer via USB.
     *   Download or clone this repository.
     *   Navigate to the directory containing `MiniRadio.py` (oder wie auch immer deine Hauptdatei heißt).
@@ -107,7 +111,7 @@ The Spectrum Analyzer repeatedly sends an "Encoder Rotate Right" command ('R') t
     *   Use the buttons and feature windows to control and explore your radio.
 
 ### Creating an Executable (Optional)
-You can use the single file ATSMiniController after installing uv.  Download the ATSMiniController file and make it executable via 'chmod +x ATSMiniController' command in a terminal window.  Upon running the program through terminal './ATSMiniController', this will create a virtual python environment, install the dependencies, and run the code.
+You can use the single file ATSMiniController after **installing uv**.  Download the ATSMiniController file and make it executable via '**chmod +x ATSMiniController'** command in a terminal window.  Upon running the program through terminal '**./ATSMiniController**', this will create a virtual python environment, install the dependencies, and run the code.
 
 It is possible to create a standalone executable from the Python script using tools like **PyInstaller**. This has been successfully tested on Linux. This can be useful for distributing the application without requiring users to install Python or dependencies.
 

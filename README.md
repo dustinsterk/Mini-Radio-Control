@@ -105,7 +105,7 @@ The Spectrum Analyzer repeatedly sends an "Encoder Rotate Right" command ('R') t
         ```bash
         chmod +x ATSMiniController
         ```
-    *   Run the script:
+    *   Run the script (this will setup the python environment and install all packages, etc.):
         ```
         ./ATSMiniController
         ```

@@ -1,5 +1,7 @@
 # Mini-Radio Control GUI
 
+** Note - you must be on firmware v2.30 for this application to work as the this enabled up to 99 memory slots locations **
+
 This updated version is fit for smaller resolution sizes and easier on the eyes with the blue color.  It also contains some new features to set memory locations.
 
 This Python application provides a graphical user interface (GUI) to control an ESP32-based SI4732 radio receiver via a serial connection. It allows users to easily manage various radio functions, view stored memories, and analyze the radio spectrum without needing to send raw serial commands manually.

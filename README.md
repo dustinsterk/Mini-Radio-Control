@@ -1,6 +1,6 @@
 # Mini-Radio Control GUI
 
-** Note - you must be on firmware v2.30 for this application to work as the this enabled up to 99 memory slots locations **
+** Note - you must be on firmware v2.30 for this application to work as this enabled up to 99 memory slots locations **
 
 This updated version is fit for smaller resolution sizes and easier on the eyes with the blue color.  It also contains some new features to set memory locations.
 
